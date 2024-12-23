@@ -30,7 +30,15 @@ jobs:
       # Build the project
       - name: Build project
         run: dotnet build src/WebHost.csproj --configuration Release --no-restore
+        
+      - name: Pack NuGet package
+        run: dotnet pack --configuration Release --output ./artifacts
 
       # Run tests
       - name: Run tests
         run: dotnet test src/WebHost.csproj --no-build --verbosity normal
+        
+      - name: Publish to NuGet
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push ./artifacts/*.nupkg --source https://api.nuget.org/v3/index.json
