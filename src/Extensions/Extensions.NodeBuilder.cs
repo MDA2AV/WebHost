@@ -22,11 +22,13 @@ public static partial class Extensions
     /// - Registers a route-specific handler as a keyed scoped service.
     /// - Enables dynamic resolution of request handlers based on the route.
     /// </remarks>
-    public static void Map(this WebHostApp.WebHostBuilder builder, string route,
+    public static WebHostApp.WebHostBuilder Map(this WebHostApp.WebHostBuilder builder, string route,
         Func<IServiceProvider, Func<IContext, Task>> func)
     {
         builder.App.HostBuilder.ConfigureServices((context, services) =>
             services.AddKeyedScoped<Func<IContext, Task>>(route, (sp, key) => func(sp)));
+
+        return builder;
     }
 
     /// <summary>
@@ -41,11 +43,13 @@ public static partial class Extensions
     /// - Registers the middleware as a scoped service.
     /// - Middleware is executed in the order it is registered.
     /// </remarks>
-    public static void UseMiddleware(this WebHostApp.WebHostBuilder builder,
+    public static WebHostApp.WebHostBuilder UseMiddleware(this WebHostApp.WebHostBuilder builder,
         Func<IServiceProvider, Func<IContext, Func<IContext, Task>, Task>> func)
     {
         builder.App.HostBuilder.ConfigureServices((context, services) =>
             services.AddScoped<Func<IContext, Func<IContext, Task>, Task>>(func));
+
+        return builder;
     }
 
     /// <summary>

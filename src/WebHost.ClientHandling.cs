@@ -233,7 +233,7 @@ public sealed partial class WebHostApp
         }
 
         var request = DecodeRequest(buffer.Slice(0, receivedBytesNumber));
-        _logger?.LogTrace($"Received: {request}");
+        _logger?.LogTrace("Received: {request}", request);
 
         return request;
     }

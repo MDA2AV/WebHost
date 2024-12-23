@@ -73,7 +73,7 @@ public sealed partial class WebHostApp
         socket.Bind(new IPEndPoint(_ipAddress, _port));
         socket.Listen(_backlog);
 
-        _logger?.LogTrace($"Created listening socket {socket.GetHashCode()}");
+        _logger?.LogTrace("Created listening socket {SocketHash}", socket.GetHashCode());
         return socket;
     }
 
@@ -102,18 +102,18 @@ public sealed partial class WebHostApp
                 //
                 _ = Task.Run(async () =>
                 {
-                    _logger?.LogTrace($"Handling client socket {client.GetHashCode()}");
+                    _logger?.LogTrace("Handling client socket {ClientHash}", client.GetHashCode());
                     try
                     {
                         await clientHandler(client, stoppingToken);
                     }
                     catch(Exception ex)
                     {
-                        _logger?.LogTrace($"Client could not be handled: {ex.Message}");
+                        _logger?.LogTrace("Client could not be handled: {Exception}", ex);
                     }
                     finally
                     {
-                        _logger?.LogTrace($"Disposing client socket {client.GetHashCode()}");
+                        _logger?.LogTrace("Disposing client socket {ClientHash}", client.GetHashCode());
                         client.Dispose(); // Ensure the client socket is disposed after use
                     }
                 }, stoppingToken);
@@ -121,7 +121,7 @@ public sealed partial class WebHostApp
         }
         finally
         {
-            _logger?.LogTrace($"Disposing listening socket {socket.GetHashCode()}");
+            _logger?.LogTrace("Disposing listening socket {SocketHash}", socket.GetHashCode());
             socket.Dispose(); // Dispose of the listening socket when the loop exits
         }
     }
@@ -136,7 +136,7 @@ public sealed partial class WebHostApp
     /// This class inherits from <see cref="BackgroundService"/> and overrides <see cref="ExecuteAsync"/> to invoke the provided action.
     /// It simplifies running long-lived asynchronous tasks, such as server loops, within a hosted service.
     /// </remarks>
-    private class Engine(Func<CancellationToken, Task> action) : BackgroundService
+    private sealed class Engine(Func<CancellationToken, Task> action) : BackgroundService
     {
         /// <summary>
         /// Executes the provided asynchronous action when the service starts.
