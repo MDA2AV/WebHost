@@ -17,7 +17,7 @@ WebHost is an ultra-lightweight web server framework for .NET, designed to handl
 
 ### Prerequisites
 
-- .NET SDK (version 7.0 or later recommended)
+- .NET SDK (version 8.0 or later recommended)
 
 ### Installation
 
