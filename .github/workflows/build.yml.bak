@@ -37,3 +37,8 @@ jobs:
       # Run tests
       - name: Run tests
         run: dotnet test src/WebHost.csproj --no-build --verbosity normal
+        
+      - name: Publish to NuGet
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push ./artifacts/*.nupkg --source https://api.nuget.org/v3/index.json

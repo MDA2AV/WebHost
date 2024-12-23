@@ -32,7 +32,7 @@ jobs:
         run: dotnet build src/WebHost.csproj --configuration Release --no-restore
         
       - name: Pack NuGet package
-        run: dotnet pack --configuration Release --output ./artifacts
+        run: dotnet pack src/WebHost.csproj --configuration Release --output ./artifacts
 
       # Run tests
       - name: Run tests
