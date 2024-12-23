@@ -29,8 +29,8 @@ jobs:
 
       # Build the project
       - name: Build project
-        run: dotnet build src/MyProject.csproj --configuration Release --no-restore
+        run: dotnet build src/WebHost.csproj --configuration Release --no-restore
 
       # Run tests
       - name: Run tests
-        run: dotnet test src/MyProject.csproj --no-build --verbosity normal
+        run: dotnet test src/WebHost.csproj --no-build --verbosity normal

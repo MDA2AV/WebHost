@@ -25,12 +25,12 @@ jobs:
 
       # Restore dependencies
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore src/WebHost.csproj
 
       # Build the project
       - name: Build project
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build src/MyProject.csproj --configuration Release --no-restore
 
       # Run tests
       - name: Run tests
-        run: dotnet test --no-build --verbosity normal
+        run: dotnet test src/MyProject.csproj --no-build --verbosity normal
