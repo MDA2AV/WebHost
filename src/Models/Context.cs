@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using System.Net.Security;
 using System.Net.Sockets;
-using System.Text;
 
 namespace WebHost.Models;
 
@@ -17,7 +16,7 @@ public class Context(Socket socket) : IContext
     public SslStream? SslStream { get; set; }
     public AsyncServiceScope Scope { get; set; }
     public T Resolve<T>() where T : notnull => Scope.ServiceProvider.GetRequiredService<T>();
-    public StringBuilder ResponseHeader { get; set; } = new StringBuilder();
+    public HttpResponseMessage HttpResponseMessage { get; set; } = null!;
     public Request Request { get; set; } = null!;
     public CancellationToken CancellationToken { get; set; }
 }

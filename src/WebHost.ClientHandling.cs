@@ -9,7 +9,6 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Text;
-using WebHost;
 
 namespace WebHost;
 
@@ -233,7 +232,7 @@ public sealed partial class WebHostApp
         }
 
         var request = DecodeRequest(buffer.Slice(0, receivedBytesNumber));
-        _logger?.LogTrace("Received: {request}", request);
+        _logger?.LogTrace("Received: {Request}", request);
 
         return request;
     }

@@ -1,7 +1,7 @@
 ﻿namespace WebHost.Attributes;
 
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, Inherited = false, AllowMultiple = false)]
-public class RouteAttribute(string route) : Attribute
+public class KeyAttribute(string key) : Attribute
 {
-    public string Route { get; } = route;
+    public string Key { get; } = key;
 }

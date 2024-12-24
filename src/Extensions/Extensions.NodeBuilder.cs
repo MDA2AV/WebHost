@@ -25,7 +25,7 @@ public static partial class Extensions
     public static WebHostApp.WebHostBuilder Map(this WebHostApp.WebHostBuilder builder, string route,
         Func<IServiceProvider, Func<IContext, Task>> func)
     {
-        builder.App.HostBuilder.ConfigureServices((context, services) =>
+        builder.App.HostBuilder.ConfigureServices((_, services) =>
             services.AddKeyedScoped<Func<IContext, Task>>(route, (sp, key) => func(sp)));
 
         return builder;
@@ -46,7 +46,7 @@ public static partial class Extensions
     public static WebHostApp.WebHostBuilder UseMiddleware(this WebHostApp.WebHostBuilder builder,
         Func<IServiceProvider, Func<IContext, Func<IContext, Task>, Task>> func)
     {
-        builder.App.HostBuilder.ConfigureServices((context, services) =>
+        builder.App.HostBuilder.ConfigureServices((_, services) =>
             services.AddScoped<Func<IContext, Func<IContext, Task>, Task>>(func));
 
         return builder;
@@ -60,13 +60,13 @@ public static partial class Extensions
     /// <returns>The configured <see cref="WebHostApp.WebHostBuilder"/> instance.</returns>
     /// <remarks>
     /// - Scans the provided assembly for classes implementing <see cref="IRequestHandler{TRequest, TResponse}"/>.
-    /// - Registers discovered handlers as keyed services based on their associated <see cref="RouteAttribute"/>.
-    /// - Handlers without a <see cref="RouteAttribute"/> are ignored, and a warning is logged.
+    /// - Registers discovered handlers as keyed services based on their associated <see cref="KeyAttribute"/>.
+    /// - Handlers without a <see cref="KeyAttribute"/> are ignored, and a warning is logged.
     /// - Enables dynamic resolution of handlers based on routes.
     /// </remarks>
     public static WebHostApp.WebHostBuilder AddHandlers(this WebHostApp.WebHostBuilder builder, Assembly assembly)
     {
-        builder.App.HostBuilder.ConfigureServices((context, services) =>
+        builder.App.HostBuilder.ConfigureServices((_, services) =>
         {
             // Scan for all types implementing IRequestHandler<TRequest, TResponse>
             var handlerTypes = assembly.GetTypes()
@@ -79,20 +79,20 @@ public static partial class Extensions
             foreach (var handler in handlerTypes)
             {
                 // Check if the class has a RouteAttribute
-                var routeAttribute = handler.HandlerType.GetCustomAttribute<RouteAttribute>();
-                if (routeAttribute == null)
+                var keyAttribute = handler.HandlerType.GetCustomAttribute<KeyAttribute>();
+                if (keyAttribute == null)
                 {
                     Console.WriteLine($"Builder: [Handler {handler.HandlerType.Name} does not have a RouteAttribute and will not be registered.]");
                     continue;
                 }
 
-                var routeKey = routeAttribute.Route;
+                var keyValue = keyAttribute.Key;
 
                 // Register the handler as a keyed service
-                services.AddKeyedScoped(handler.InterfaceType, routeKey, (sp, key) =>
+                services.AddKeyedScoped(handler.InterfaceType, keyValue, (sp, _) =>
                     ActivatorUtilities.CreateInstance(sp, handler.HandlerType));
 
-                Console.WriteLine($"Builder: [Registered {handler.HandlerType} as {handler.InterfaceType} with key '{routeKey}']");
+                Console.WriteLine($"Builder: [Registered {handler.HandlerType} as {handler.InterfaceType} with key '{keyValue}']");
             }
         });
 

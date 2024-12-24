@@ -2,7 +2,6 @@
 using WebHost.Models;
 using System.Net.Security;
 using System.Net.Sockets;
-using System.Text;
 
 namespace WebHost;
 
@@ -48,13 +47,13 @@ public interface IContext
     T Resolve<T>() where T : notnull;
 
     /// <summary>
-    /// Gets or sets the <see cref="StringBuilder"/> used to build the response headers for the client.
+    /// Gets or sets the HttpResponseMessage representing the HTTP response.
     /// </summary>
     /// <remarks>
-    /// - Provides a mechanism for constructing and managing HTTP response headers.
-    /// - Initialized per request and used in conjunction with the response body.
+    /// This property encapsulates the status code, headers, and content of an HTTP response.
+    /// It can be used to configure or inspect the response in an HTTP client-server communication.
     /// </remarks>
-    StringBuilder ResponseHeader { get; set; }
+    HttpResponseMessage HttpResponseMessage { get; set; }
 
     /// <summary>
     /// Gets or sets the <see cref="Request"/> object representing the current client request.

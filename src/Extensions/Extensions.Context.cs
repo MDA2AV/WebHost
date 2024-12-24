@@ -23,58 +23,11 @@ public static partial class Extensions
     public static async Task Respond(this IContext context, IResponseBuilder responseBuilder, CancellationToken cancellationToken = default)
     {
         if (responseBuilder == null)
+        {
             throw new ArgumentNullServiceException(nameof(responseBuilder));
+        }
 
         await responseBuilder.HandleAsync(context, cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a string response to the client.
-    /// </summary>
-    /// <param name="context">The <see cref="IContext"/> representing the current client connection.</param>
-    /// <param name="body">The response body as a string.</param>
-    /// <param name="cancellationToken"></param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    /// <exception cref="ArgumentNullServiceException">
-    /// Thrown if <paramref name="body"/> is <c>null</c>.
-    /// </exception>
-    public static async Task Respond(this IContext context, string body, CancellationToken cancellationToken = default)
-    {
-        if (body is null)
-            throw new ArgumentNullServiceException(nameof(body));
-
-        await context.Respond(Encoding.UTF8.GetBytes(body), cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a response to the client using a <see cref="StringBuilder"/> for the response body.
-    /// </summary>
-    /// <param name="context">The <see cref="IContext"/> representing the current client connection.</param>
-    /// <param name="body">The response body as a <see cref="StringBuilder"/>.</param>
-    /// <param name="cancellationToken"></param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    /// <exception cref="ArgumentNullServiceException">
-    /// Thrown if <paramref name="body"/> is <c>null</c>.
-    /// </exception>
-    public static async Task Respond(this IContext context, StringBuilder body, CancellationToken cancellationToken = default)
-    {
-        if (body is null)
-            throw new ArgumentNullServiceException(nameof(body));
-
-        await context.Respond(Encoding.UTF8.GetBytes(body.ToString()), cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a response to the client using a binary body represented as <see cref="ReadOnlyMemory{T}"/>.
-    /// </summary>
-    /// <param name="context">The <see cref="IContext"/> representing the current client connection.</param>
-    /// <param name="body">The response body as a binary payload.</param>
-    /// <param name="cancellationToken"></param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    public static async Task Respond(this IContext context, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default)
-    {
-        await SendAsync(context, context.ResponseHeader.ToString(), cancellationToken);
-        await SendAsync(context, body, cancellationToken);
     }
 
     /// <summary>
@@ -110,13 +63,12 @@ public static partial class Extensions
             return;
         }
 
-        if (context.Socket is not null)
+        if (context.Socket is null)
         {
-            await context.Socket!.SendAsync(responseBytes, cancellationToken);
-            return;
+            throw new ServiceUnavailableServiceException("[56235]Socket not found.");
         }
 
-        throw new ServiceUnavailableServiceException("[56235]Socket not found.");
+        await context.Socket!.SendAsync(responseBytes, cancellationToken);
     }
 
     /// <summary>

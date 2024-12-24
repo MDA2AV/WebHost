@@ -9,12 +9,13 @@
     <Authors>Toni Caçadeira</Authors>
     <RepositoryUrl>https://github.com/MDA2AV/WebHost</RepositoryUrl>
 	  <RepositoryType>git</RepositoryType>
-    <AssemblyVersion>8.0.2</AssemblyVersion>
-    <FileVersion>8.0.2</FileVersion>
-    <Version>8.0.2</Version>
+    <AssemblyVersion>8.0.3</AssemblyVersion>
+    <FileVersion>8.0.3</FileVersion>
+    <Version>8.0.3</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>socket;webserver;lightweight</PackageTags>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <Description>Ultra lightweight highly customizable web server based on IHost and Socket classes. No third party dependencies.</Description>
   </PropertyGroup>
 
   <ItemGroup>
