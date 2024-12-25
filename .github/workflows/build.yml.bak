@@ -51,4 +51,4 @@ jobs:
       - name: Publish to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: dotnet nuget push ./artifacts/*.nupkg --source https://nuget.pkg.github.com/MDA2AV/index.json --api-key $GITHUB_TOKEN --skip-duplicate
+        run: dotnet nuget push ./artifacts/*.nupkg --source https://nuget.pkg.github.com/MDA2AV/index.json --api-key $GITHUB_TOKEN
