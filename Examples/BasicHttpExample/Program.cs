@@ -52,6 +52,14 @@ internal class Program
             //
             .Map("/route2", scope => async context =>
             {
+                Console.WriteLine($"Received route: {context.Request.Route}");
+                foreach (var header in context.Request.Headers)
+                {
+                    Console.WriteLine($"Received header: {context.Request.Route}"); 
+
+                }
+                Console.WriteLine($"Received body: {context.Request.Body}");
+
                 // Resolve the request handler
                 //
                 var handler = scope.GetRequiredKeyedService<IRequestHandler<ExampleQuery, bool>>("ExampleKey");

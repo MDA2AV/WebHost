@@ -53,7 +53,7 @@ public interface IContext
     /// This property encapsulates the status code, headers, and content of an HTTP response.
     /// It can be used to configure or inspect the response in an HTTP client-server communication.
     /// </remarks>
-    HttpResponseMessage HttpResponseMessage { get; set; }
+    HttpResponseMessage Response { get; set; }
 
     /// <summary>
     /// Gets or sets the <see cref="Request"/> object representing the current client request.

@@ -145,21 +145,24 @@ public sealed partial class WebHostApp
             //
             (string[], string) requestData = RequestParser.SplitHeadersAndBody(request);
 
-            // Try to extract the route from the headers
+            // Try to extract the uri from the headers
             //
-            var result = RequestParser.TryExtractRoute(headers: requestData.Item1, out (string, string) route);
+            var result = RequestParser.TryExtractUri(headers: requestData.Item1, out (string, string) uriHeader);
             if (!result)
             {
                 _logger?.LogTrace("Invalid request received, unable to parse route");
                 throw new InvalidOperationServiceException("Invalid request received, unable to parse route");
             }
 
+            var uriParams = uriHeader.Item2.Split('?');
+
             // Populate the context with the parsed request information
             //
             context.Request = new Request(Headers: requestData.Item1,
                                           Body: requestData.Item2,
-                                          Route: route.Item2,
-                                          HttpMethod: route.Item1);
+                                          Route: uriParams[0],
+                                          QueryParameters: uriParams.Length > 1 ? uriParams[1] : string.Empty,
+                                          HttpMethod: uriHeader.Item1);
 
             // Create a new scope for handling the request
             //

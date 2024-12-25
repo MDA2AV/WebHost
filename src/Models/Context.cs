@@ -7,6 +7,7 @@ namespace WebHost.Models;
 public record Request(IEnumerable<string> Headers,
                       string Body,
                       string Route,
+                      string QueryParameters,
                       string HttpMethod);
 
 
@@ -16,7 +17,7 @@ public class Context(Socket socket) : IContext
     public SslStream? SslStream { get; set; }
     public AsyncServiceScope Scope { get; set; }
     public T Resolve<T>() where T : notnull => Scope.ServiceProvider.GetRequiredService<T>();
-    public HttpResponseMessage HttpResponseMessage { get; set; } = null!;
+    public HttpResponseMessage Response { get; set; } = null!;
     public Request Request { get; set; } = null!;
     public CancellationToken CancellationToken { get; set; }
 }

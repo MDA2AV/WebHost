@@ -9,18 +9,18 @@ namespace WebHost.Utils;
 public static class RequestParser
 {
     /// <summary>
-    /// Attempts to extract the HTTP method and route path from a collection of headers.
+    /// Attempts to extract the HTTP method and uri path from a collection of headers.
     /// </summary>
     /// <param name="headers">The collection of headers to parse.</param>
     /// <param name="route">
-    /// When the method returns <c>true</c>, contains a tuple of the HTTP method (e.g., GET, POST) and the route path (e.g., /api/resource).
+    /// When the method returns <c>true</c>, contains a tuple of the HTTP method (e.g., GET, POST) and the uri path (e.g., /api/resource?param=1).
     /// </param>
     /// <returns>
     /// <c>true</c> if the HTTP method and route path were successfully extracted; otherwise, <c>false</c>.
     /// </returns>
-    public static bool TryExtractRoute(IEnumerable<string> headers, out (string, string) route)
+    public static bool TryExtractUri(IEnumerable<string> headers, out (string, string) route)
     {
-        const string pattern = @"^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(/[\w\/\-]*)\s+HTTP\/\d\.\d";
+        const string pattern = @"^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(/[^\s]*)\s+HTTP\/\d\.\d";
 
         route = default;
 
@@ -30,12 +30,13 @@ public static class RequestParser
 
         if (match is { Success: true })
         {
-            var method = match.Groups[1].Value;
-            var path = match.Groups[2].Value;
+            var method = match.Groups[1].Value; // Extract HTTP method
+            var path = match.Groups[2].Value;   // Extract URI including query parameters
 
             route = (method, path);
-            return true;
 
+            Console.WriteLine($"method: {method}  route: {route}");
+            return true;
         }
 
         Console.WriteLine($"Endpoint was not found.");

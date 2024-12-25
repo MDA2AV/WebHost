@@ -39,7 +39,6 @@ internal class Program
                         break;
                     }
 
-                    //MISSING DECODE!!
                     Console.WriteLine("WebSocket Message: " + receivedData.Item2);
 
                     if (receivedData.Item2.Equals("quit"))
@@ -47,9 +46,7 @@ internal class Program
                         break;
                     }
 
-                    await context.SendAsync("Hello"u8.ToArray());
-                    //await context.WsSendAsync(receivedData.Item2);
-
+                    await context.WsSendAsync(receivedData.Item2);
                 }
             });
 
