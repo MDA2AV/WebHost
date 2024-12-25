@@ -1,9 +1,9 @@
 ﻿using WebHost.Attributes;
 using WebHost;
 
-namespace BasicHttpExample;
+namespace Shared;
 
-[Route("ExampleKey")]
+[Key("ExampleKey")]
 public class TestHandler(ExampleService exampleService) : IRequestHandler<ExampleQuery, bool>
 {
     public async Task<bool> Handle(ExampleQuery query, CancellationToken cancellationToken)

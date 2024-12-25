@@ -120,7 +120,6 @@ public sealed partial class WebHostApp
     /// </remarks>
     private async Task HandleClientAsync(Socket client, SslStream? sslStream, CancellationToken stoppingToken)
     {
-        // TODO: Have different Context implementations for Http and websockets
         var context = new Context(client)
         {
             SslStream = sslStream,
@@ -309,37 +308,55 @@ public sealed partial class WebHostApp
     }
 
     /// <summary>
-    /// Creates a WebSocket handshake response based on the client's request.
+    /// Creates a WebSocket handshake response for an incoming WebSocket upgrade request.
     /// </summary>
-    /// <param name="request">The client's HTTP WebSocket upgrade request as a string.</param>
+    /// <param name="request">
+    /// The raw HTTP request string received from the client, which includes headers and the WebSocket key.
+    /// </param>
     /// <returns>
-    /// A string containing the WebSocket handshake response to be sent to the client.
+    /// A <see cref="string"/> representing the HTTP response to complete the WebSocket handshake,
+    /// containing the necessary headers to switch protocols.
     /// </returns>
     /// <remarks>
-    /// - Extracts the `Sec-WebSocket-Key` from the client's request headers.
-    /// - Combines the key with a magic GUID string (`258EAFA5-E914-47DA-95CA-C5AB0DC85B11`) as per the WebSocket protocol.
-    /// - Computes the SHA-1 hash of the combined string and encodes it in Base64 format to generate the `Sec-WebSocket-Accept` header.
-    /// - Constructs the full HTTP response with the required WebSocket upgrade headers.
-    /// - Complies with the WebSocket handshake as defined in RFC 6455.
+    /// This method processes the WebSocket upgrade request by:
+    /// - Extracting the `Sec-WebSocket-Key` header from the request.
+    /// - Generating the `Sec-WebSocket-Accept` value by concatenating the key with a standard magic GUID,
+    ///   hashing the result using SHA-1, and encoding it in Base64.
+    /// - Constructing an HTTP response with the required headers (`Upgrade`, `Connection`, and `Sec-WebSocket-Accept`).
+    /// 
+    /// The handshake follows the WebSocket protocol as defined in RFC 6455, Section 4.2.2.
+    /// 
+    /// Limitations:
+    /// - Assumes the `request` parameter contains a complete HTTP request.
+    /// - Does not validate other aspects of the request, such as HTTP method or version.
     /// </remarks>
-    /// <exception cref="FormatException">
-    /// Thrown if the `Sec-WebSocket-Key` header is missing or improperly formatted in the request.
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the `Sec-WebSocket-Key` header is not found in the request, indicating an invalid WebSocket upgrade request.
     /// </exception>
     private static string CreateHandshakeResponse(string request)
     {
-        const string magicString = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"; // WebSocket protocol magic GUID
+        Console.WriteLine("New handshake----");
+        const string magicString = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-        // Extract the Sec-WebSocket-Key from the request
-        var key = request.Split(["Sec-WebSocket-Key: "], StringSplitOptions.None)[1]
-                         .Split('\r', '\n')[0]
-                         .Trim();
+        // Extract the Sec-WebSocket-Key using a more robust method
+        var keyLine = request.Split(["\r\n"], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(line => line.StartsWith("Sec-WebSocket-Key:", StringComparison.OrdinalIgnoreCase));
 
-        // Generate the Sec-WebSocket-Accept value by hashing and encoding the key
+        if (keyLine == null)
+        {
+            throw new InvalidOperationException("Sec-WebSocket-Key not found in the request.");
+        }
+
+        var key = keyLine["Sec-WebSocket-Key:".Length..].Trim();
+
+        // Generate the Sec-WebSocket-Accept header value
         var acceptKey = Convert.ToBase64String(
+#pragma warning disable CA1850
             SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(key + magicString))
+#pragma warning restore CA1850
         );
 
-        // Build and return the handshake response
+        // Build the response
         return "HTTP/1.1 101 Switching Protocols\r\n" +
                "Upgrade: websocket\r\n" +
                "Connection: Upgrade\r\n" +

@@ -2,7 +2,7 @@
 using WebHost;
 using WebHost.Extensions;
 
-namespace BasicHttpExample;
+namespace Shared;
 
 /// <summary>
 /// Builds and sends a chunked HTTP response.

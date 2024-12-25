@@ -114,12 +114,9 @@ public static partial class Extensions
     {
         var receivedBytes = await context.ReadAsync(buffer, cancellationToken);
 
-        if (receivedBytes == 0)
-        {
-            return (receivedBytes, string.Empty);
-        }
-
-        return (receivedBytes, context.DecodeMessage(buffer, receivedBytes));
+        return receivedBytes == 0 
+            ? (receivedBytes, string.Empty) 
+            : (receivedBytes, context.DecodeMessage(buffer, receivedBytes));
     }
 
     /// <summary>
@@ -149,28 +146,103 @@ public static partial class Extensions
     }
 
     /// <summary>
-    /// Decodes a WebSocket message from the specified memory buffer.
+    /// Decodes a WebSocket frame received from a client by parsing the payload length,
+    /// handling masking (if present), and extracting the decoded UTF-8 message content.
     /// </summary>
-    /// <param name="context">The <see cref="IContext"/> representing the current connection.</param>
-    /// <param name="buffer">The <see cref="Memory{T}"/> containing the WebSocket frame to decode.</param>
-    /// <param name="length">The number of bytes in the buffer to decode.</param>
-    /// <returns>The decoded message as a string.</returns>
+    /// <param name="context">
+    /// The IContext instance, representing the current communication context.
+    /// This parameter provides access to additional context-related utilities if needed.
+    /// </param>
+    /// <param name="buffer">
+    /// A <see cref="Memory{byte}"/> object containing the raw WebSocket frame received from the client.
+    /// The buffer holds the complete frame, including headers, masking key (if present), and payload data.
+    /// </param>
+    /// <param name="length">
+    /// The number of bytes in the <paramref name="buffer"/> representing the received WebSocket frame.
+    /// This value ensures that only the relevant portion of the buffer is processed.
+    /// </param>
+    /// <returns>
+    /// A <see cref="string"/> containing the decoded UTF-8 message extracted from the WebSocket frame payload.
+    /// If the frame is masked (as required for client-to-server frames), the payload is unmasked before decoding.
+    /// </returns>
+    /// <remarks>
+    /// This method supports standard WebSocket frame structures, including:
+    /// - Payload lengths up to 64 bits (with extended length fields for values >125).
+    /// - Masked client frames, unmasking the payload using the XOR operation and the 4-byte masking key.
+    /// 
+    /// Limitations:
+    /// - Assumes that the buffer contains a complete WebSocket frame.
+    /// - Does not handle WebSocket control frames (e.g., Ping, Pong, or Close frames).
+    /// 
+    /// WebSocket frames consist of a header, an optional masking key (for client-to-server frames),
+    /// and the payload. This method extracts and decodes the payload according to the WebSocket protocol.
+    ///
+    /// Reference: RFC 6455 (The WebSocket Protocol)
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// Thrown if the payload length exceeds the buffer's capacity, indicating an incomplete or invalid frame.
+    /// </exception>
     public static string DecodeMessage(this IContext context, Memory<byte> buffer, int length)
     {
-        var span = buffer.Span; // Access the Span<T> for working with the memory
+        var span = buffer.Span;
 
-        var payloadStart = 2;
+        // Check the MASK bit
+        //
+        var isMasked = (span[1] & 0x80) != 0;
+
+        // Extract payload length
+        //
         var payloadLength = span[1] & 0x7F;
+        var payloadStart = 2;
 
-        payloadStart = payloadLength switch
+        switch (payloadLength)
         {
-            126 => 4,
-            127 => 10,
-            _ => payloadStart
-        };
+            // Adjust for extended payload lengths
+            //
+            case 126:
+                payloadLength = (span[2] << 8) | span[3]; // 16-bit length
+                payloadStart = 4;
+                break;
+            case 127:
+                // 64-bit length, not common, typically used for very large payloads
+                //
+                payloadLength = (int)(
+                    ((ulong)span[2] << 56) |
+                    ((ulong)span[3] << 48) |
+                    ((ulong)span[4] << 40) |
+                    ((ulong)span[5] << 32) |
+                    ((ulong)span[6] << 24) |
+                    ((ulong)span[7] << 16) |
+                    ((ulong)span[8] << 8) |
+                    span[9]);
+                payloadStart = 10;
+                break;
+        }
 
-        var payload = span.Slice(payloadStart, payloadLength); // Slice the payload directly from the span
+        // Extract the masking key if the MASK bit is set
+        //
+        var maskKey = Array.Empty<byte>();
+        if (isMasked)
+        {
+            maskKey = span.Slice(payloadStart, 4).ToArray();
+            payloadStart += 4;
+        }
 
+        // Extract and decode the payload
+        //
+        var payload = span.Slice(payloadStart, payloadLength).ToArray();
+
+        if (!isMasked)
+        {
+            return Encoding.UTF8.GetString(payload);
+        }
+        for (var i = 0; i < payload.Length; i++)
+        {
+            payload[i] ^= maskKey[i % 4]; // XOR with the masking key
+        }
+
+        // Return the decoded string
+        //
         return Encoding.UTF8.GetString(payload);
     }
 

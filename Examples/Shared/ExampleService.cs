@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 
-namespace BasicHttpExample;
+namespace Shared;
 
 // Example service class.
 // Will be automatically disposed by the end of the request.

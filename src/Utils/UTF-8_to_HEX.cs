@@ -2,6 +2,8 @@
 
 namespace WebHost.Utils;
 
+// For manual lookup purposes if needed
+//
 public static class Utf8ToHexMap
 {
     public static readonly ImmutableDictionary<string, byte> Map = ImmutableDictionary.CreateRange([
