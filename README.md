@@ -8,11 +8,12 @@ WebHost is an ultra-lightweight web server framework for .NET, designed to handl
 
 Provide fully customizable and low level access to http request. This package was born from the need to run a .NET C# web server on any .NET supported platform, which is not possible using ASP.NET Core.
 
-# Fully Native
+## Fully Native
 
 No third party libraries used, the only dependencies are
 
 Microsoft.Extensions.DependencyInjection.Abstractions (>= 9.0.0)
+
 Microsoft.Extensions.Hosting (>= 9.0.0)
 
 ## Features
@@ -23,6 +24,12 @@ Microsoft.Extensions.Hosting (>= 9.0.0)
 - **Route Mapping**: Dynamically registers route handlers with attributes or fluent API.
 - **Extensible Architecture**: Integrates with .NET's dependency injection for custom services and middleware.
 - **Lightweight Design**: Minimal overhead with high-performance socket-based networking.
+
+### HTTP Version support
+
+- **HTTP/1.x**: Yes
+- **HTTP/2.0**: In progress
+- **HTTP/3.0**: Not planned yet
 
 ## Getting Started
 
@@ -152,7 +159,7 @@ builder.UseMiddleware(scope => async (context, next) =>
 .Map("/websocket", scope => async (context) =>
 {
     var logger = scope.GetRequiredService<ILogger<Program>>();
-    
+
     var buffer = new Memory<byte>(new byte[1024]);
 
     while (true)
