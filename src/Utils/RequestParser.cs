@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System;
+using System.Text.RegularExpressions;
 using WebHost.Exceptions;
 
 namespace WebHost.Utils;
@@ -18,9 +19,16 @@ public static class RequestParser
     /// <returns>
     /// <c>true</c> if the HTTP method and route path were successfully extracted; otherwise, <c>false</c>.
     /// </returns>
-    public static bool TryExtractUri(IEnumerable<string> headers, out (string, string) route)
+    public static bool TryExtractUri(IEnumerable<string>? headers, out (string, string) route)
     {
-        const string pattern = @"^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(/[^\s]*)\s+HTTP\/\d\.\d";
+        if (headers == null)
+        {
+            System.Diagnostics.Debug.WriteLine("Headers is null");
+            route = (null!, null!);
+            return false;
+        }
+
+        const string pattern = @"^\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(/[^\s]*)\s+HTTP/\d\.\d\s*$";
 
         route = default;
 
@@ -35,7 +43,6 @@ public static class RequestParser
 
             route = (method, path);
 
-            Console.WriteLine($"method: {method}  route: {route}");
             return true;
         }
 

@@ -135,10 +135,7 @@ public sealed partial class WebHostApp
         {
             if (request.Contains("Upgrade: websocket"))
             {
-                var response = CreateHandshakeResponse(request);
-                var responseBytes = Encoding.UTF8.GetBytes(response);
-
-                await context.SendAsync(responseBytes, cancellationToken: stoppingToken);
+                await SendHandshakeResponse(context, request);
             }
 
             // Split the request into headers and body
@@ -197,16 +194,17 @@ public sealed partial class WebHostApp
     /// <exception cref="InvalidOperationServiceException"></exception>
     public static Task Pipeline(IContext context, int index, IList<Func<IContext, Func<IContext, Task>, Task>> middleware)
     {
-        if (index >= middleware.Count)
+        if (index < middleware.Count)
         {
-            var endpoint = context.Scope.ServiceProvider.GetRequiredKeyedService<Func<IContext, Task>>(context.Request.Route);
-
-            return endpoint is null
-                ? throw new InvalidOperationServiceException("Unable to find the Invoke method on the resolved service.")
-                : endpoint.Invoke(context);
+            return middleware[index](context, async (ctx) => await Pipeline(ctx, index + 1, middleware));
         }
 
-        return middleware[index](context, async (ctx) => await Pipeline(ctx, index + 1, middleware));
+        var endpoint = context.Scope.ServiceProvider.GetRequiredKeyedService<Func<IContext, Task>>(context.Request.Route);
+
+        return endpoint is null
+            ? throw new InvalidOperationServiceException("Unable to find the Invoke method on the resolved service.")
+            : endpoint.Invoke(context);
+
     }
 
     /// <summary>
@@ -233,7 +231,7 @@ public sealed partial class WebHostApp
             return null;
         }
 
-        var request = DecodeRequest(buffer.Slice(0, receivedBytesNumber));
+        var request = DecodeRequest(buffer[..receivedBytesNumber]);
         _logger?.LogTrace("Received: {Request}", request);
 
         return request;
@@ -313,6 +311,7 @@ public sealed partial class WebHostApp
     /// <summary>
     /// Creates a WebSocket handshake response for an incoming WebSocket upgrade request.
     /// </summary>
+    /// <param name="context"></param>
     /// <param name="request">
     /// The raw HTTP request string received from the client, which includes headers and the WebSocket key.
     /// </param>
@@ -336,10 +335,19 @@ public sealed partial class WebHostApp
     /// <exception cref="InvalidOperationException">
     /// Thrown if the `Sec-WebSocket-Key` header is not found in the request, indicating an invalid WebSocket upgrade request.
     /// </exception>
-    private static string CreateHandshakeResponse(string request)
+    private static async Task SendHandshakeResponse(IContext context, string request)
     {
-        Console.WriteLine("New handshake----");
         const string magicString = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+        // Predefined byte arrays for fixed parts of the response
+        ReadOnlyMemory<byte> fixedResponsePart = new byte[] {
+        0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x31, 0x30, 0x31, 0x20, 0x53, 0x77, 0x69, 0x74, 0x63, 0x68, 0x69, 0x6E, 0x67, 0x20, 0x50, 0x72, 0x6F, 0x74, 0x6F, 0x63, 0x6F, 0x6C, 0x73, 0x0D, 0x0A,
+        0x55, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x3A, 0x20, 0x77, 0x65, 0x62, 0x73, 0x6F, 0x63, 0x6B, 0x65, 0x74, 0x0D, 0x0A,
+        0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x55, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x0D, 0x0A,
+        0x53, 0x65, 0x63, 0x2D, 0x57, 0x65, 0x62, 0x53, 0x6F, 0x63, 0x6B, 0x65, 0x74, 0x2D, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20
+        };
+
+        ReadOnlyMemory<byte> responseTerminator = new byte[] { 0x0D, 0x0A, 0x0D, 0x0A };
 
         // Extract the Sec-WebSocket-Key using a more robust method
         var keyLine = request.Split(["\r\n"], StringSplitOptions.RemoveEmptyEntries)
@@ -359,10 +367,14 @@ public sealed partial class WebHostApp
 #pragma warning restore CA1850
         );
 
-        // Build the response
-        return "HTTP/1.1 101 Switching Protocols\r\n" +
-               "Upgrade: websocket\r\n" +
-               "Connection: Upgrade\r\n" +
-               "Sec-WebSocket-Accept: " + acceptKey + "\r\n\r\n";
+        var acceptKeyBytes = Encoding.UTF8.GetBytes(acceptKey);
+
+        // Concatenate the byte arrays into a single ReadOnlyMemory<byte>
+        var responseBytes = new byte[fixedResponsePart.Length + acceptKeyBytes.Length + responseTerminator.Length];
+        fixedResponsePart.Span.CopyTo(responseBytes);
+        acceptKeyBytes.CopyTo(responseBytes.AsSpan(fixedResponsePart.Length));
+        responseTerminator.Span.CopyTo(responseBytes.AsSpan(fixedResponsePart.Length + acceptKeyBytes.Length));
+
+        await context.SendAsync(responseBytes.AsMemory());
     }
 }

@@ -8,12 +8,15 @@ using WebHost.Extensions;
 using System.Text.Json;
 using WebHost.Exceptions;
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using Shared;
 
 internal class Program
 {
     public static async Task Main(string[] args)
     {
+        ILogger validationLogger = default;
+
         var builder = WebHostApp.CreateBuilder();
 
         builder.App.HostBuilder
@@ -31,6 +34,56 @@ internal class Program
             });
 
         builder
+            // Custom mutual TLS handling (also validating client certificate)
+            //
+            .UseTls(securityOptions =>
+            {
+                // Load certificate authority
+                // This isn't required for standard TLS (not mutual TLS)
+                //
+                securityOptions.CaCertificate = CertificateLoader
+                    .LoadCertificateFromResource(Assembly.GetExecutingAssembly(), "certAuth.crt");
+                // Load server certificate
+                //
+                securityOptions.ServerCertificate = CertificateLoader
+                    .LoadCertificateFromResource(Assembly.GetExecutingAssembly(),"server.pfx", "webhost");
+
+                // Custom Client certification callback to validate client's certificate
+                // This isn't required for standard TLS (not mutual TLS)
+                //
+                securityOptions.ClientCertificateValidation = (sender, certificate, chain, sslPolicyErrors) =>
+                {
+                    if (validationLogger is null) return false;
+                    if (certificate is null) return false;
+
+                    validationLogger.LogCritical("Validating client certificate...");
+
+                    chain = new X509Chain();
+                    var chainPolicy = new X509ChainPolicy
+                    {
+                        VerificationFlags = X509VerificationFlags.NoFlag,
+                        RevocationMode = X509RevocationMode.NoCheck,
+                        TrustMode = X509ChainTrustMode.CustomRootTrust
+                    };
+
+                    chainPolicy.CustomTrustStore.Add(securityOptions.CaCertificate);
+                    chain.ChainPolicy = chainPolicy;
+
+                    var isChainValid = chain.Build(new X509Certificate2(certificate));
+                    if (isChainValid)
+                    {
+                        validationLogger.LogCritical("Client certificate is valid and issued by trusted CA.");
+                        return true;
+                    }
+
+                    validationLogger.LogCritical("Client certificate validation failed:");
+                    foreach (var status in chain.ChainStatus)
+                    {
+                        validationLogger.LogCritical(" - {Status}: {StatusInformation}", status.Status, status.StatusInformation);
+                    }
+                    return false;
+                };
+            })
             .AddHandlers(Assembly.GetExecutingAssembly())
             .AddHandlers(Assembly.GetAssembly(typeof(TestHandler))!) // Passing the request handler type since it is on a different assembly
             .SetEndpoint("127.0.0.1", 9001)
@@ -40,7 +93,7 @@ internal class Program
             .Map("/route", scope => async context =>
             {
                 const string content = "Hello from WebHost!";
-                var response = 
+                var response =
                     "HTTP/1.1 200 OK\r\n" +
                     "Content-Type: text/html\r\n" +
                     $"Content-Length: {Encoding.UTF8.GetByteCount(content)}\r\n" +
@@ -161,7 +214,10 @@ internal class Program
                 }
             });
 
-        await builder.Build().StartAsync();
+        var app = await builder.Build().StartAsync();
+
+        var loggerFactory = app.InternalHost.Services.GetRequiredService<ILoggerFactory>();
+        validationLogger = loggerFactory.CreateLogger("Validation");
 
         Console.WriteLine("[Running, press ENTER to finish.]");
         Console.ReadLine();

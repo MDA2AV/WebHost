@@ -8,6 +8,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="certAuth.crt" />
+    <None Remove="server.pfx" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="certAuth.crt" />
+    <EmbeddedResource Include="server.pfx" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="WebHost" Version="8.0.5" />
   </ItemGroup>
 

@@ -186,6 +186,13 @@ public static partial class Extensions
     {
         var span = buffer.Span;
 
+        // Validate minimum frame length
+        //
+        if (length < 2)
+        {
+            throw new ArgumentException("The frame is incomplete or invalid.", nameof(buffer));
+        }
+
         // Check the MASK bit
         //
         var isMasked = (span[1] & 0x80) != 0;
@@ -200,12 +207,14 @@ public static partial class Extensions
             // Adjust for extended payload lengths
             //
             case 126:
+                if (length < 4) throw new ArgumentException("The frame is incomplete or invalid.", nameof(buffer));
                 payloadLength = (span[2] << 8) | span[3]; // 16-bit length
                 payloadStart = 4;
                 break;
             case 127:
                 // 64-bit length, not common, typically used for very large payloads
                 //
+                if (length < 10) throw new ArgumentException("The frame is incomplete or invalid.", nameof(buffer));
                 payloadLength = (int)(
                     ((ulong)span[2] << 56) |
                     ((ulong)span[3] << 48) |
@@ -219,11 +228,19 @@ public static partial class Extensions
                 break;
         }
 
+        // Check if the total frame length is sufficient
+        //
+        if (length < payloadStart + payloadLength)
+        {
+            throw new ArgumentException("The frame is incomplete or invalid.", nameof(buffer));
+        }
+
         // Extract the masking key if the MASK bit is set
         //
         var maskKey = Array.Empty<byte>();
         if (isMasked)
         {
+            if (length < payloadStart + 4) throw new ArgumentException("The frame is incomplete or invalid.", nameof(buffer));
             maskKey = span.Slice(payloadStart, 4).ToArray();
             payloadStart += 4;
         }
