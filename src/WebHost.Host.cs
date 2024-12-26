@@ -41,6 +41,14 @@ public sealed partial class WebHostApp
     }
 
     /// <summary>
+    /// Runs the WebHostApp asynchronously, awaitable blocking operation.
+    /// </summary>
+    public async Task RunAsync()
+    {
+        await InternalHost.RunAsync();
+    }
+
+    /// <summary>
     /// Starts the WebHostApp synchronously by initializing and starting the underlying host.
     /// </summary>
     /// <returns>The current <see cref="WebHostApp"/> instance for method chaining or further interaction.</returns>
@@ -48,6 +56,14 @@ public sealed partial class WebHostApp
     {
         InternalHost.Start();
         return this;
+    }
+
+    /// <summary>
+    /// Runs the WebHostApp synchronously, blocking operation.
+    /// </summary>
+    public void Run()
+    {
+        InternalHost.Run();
     }
 
     /// <summary>

@@ -29,6 +29,8 @@ internal class Program
             .SetEndpoint("127.0.0.1", 9001)
             .Map("/websocket", scope => async (context) =>
             {
+                var logger = scope.GetRequiredService<ILogger<Program>>();
+
                 var buffer = new Memory<byte>(new byte[1024]);
 
                 while (true)
@@ -39,7 +41,7 @@ internal class Program
                         break;
                     }
 
-                    Console.WriteLine("WebSocket Message: " + receivedData.Item2);
+                    logger.LogInformation("WebSocket Message: {Message}", receivedData.Item2);
 
                     if (receivedData.Item2.Equals("quit"))
                     {
