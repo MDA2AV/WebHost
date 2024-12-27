@@ -27,7 +27,7 @@ internal class Program
 
         builder
             .SetEndpoint("127.0.0.1", 9001)
-            .Map("/websocket", scope => async (context) =>
+            .MapGet("/websocket", scope => async (context) =>
             {
                 var logger = scope.GetRequiredService<ILogger<Program>>();
 

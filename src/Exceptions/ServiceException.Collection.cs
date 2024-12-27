@@ -44,3 +44,13 @@ public sealed class ConnectionClosedServiceException(string message = "Connectio
 {
     public override ResponseStatus StatusCode => ResponseStatus.ServiceUnavailable;
 }
+
+public sealed class BadRequestServiceException(string message = "Bad request.") : ServiceException(message)
+{
+    public override ResponseStatus StatusCode => ResponseStatus.BadRequest;
+}
+
+public sealed class InternalErrorServiceException(string message = "Internal Error.") : ServiceException(message)
+{
+    public override ResponseStatus StatusCode => ResponseStatus.InternalServerError;
+}
