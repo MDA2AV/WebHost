@@ -40,7 +40,7 @@ jobs:
 
       # Run tests
       - name: Run tests
-        run: dotnet test src/WebHost.csproj --no-build --verbosity normal
+        run: dotnet test Tests/Tests/Tests.csproj --verbosity normal
         
       - name: Publish to NuGet
         env:

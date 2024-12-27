@@ -19,6 +19,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Shared", "Examples\Shared\S
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Examples", "Examples", "{CDD3E5A6-7E4A-4BF2-A184-24B587D9C6D1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AndroidServer", "Examples\AndroidServer\AndroidServer.csproj", "{2F049CFF-5FF5-4F5E-8594-5D3B4A2E4653}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -53,6 +55,12 @@ Global
 		{282AC1D8-893E-4F1E-979A-F1DAD3A934BD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{282AC1D8-893E-4F1E-979A-F1DAD3A934BD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{282AC1D8-893E-4F1E-979A-F1DAD3A934BD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2F049CFF-5FF5-4F5E-8594-5D3B4A2E4653}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2F049CFF-5FF5-4F5E-8594-5D3B4A2E4653}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2F049CFF-5FF5-4F5E-8594-5D3B4A2E4653}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{2F049CFF-5FF5-4F5E-8594-5D3B4A2E4653}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2F049CFF-5FF5-4F5E-8594-5D3B4A2E4653}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2F049CFF-5FF5-4F5E-8594-5D3B4A2E4653}.Release|Any CPU.Deploy.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -63,6 +71,7 @@ Global
 		{7AD3DF38-D8C1-4C2D-BA8E-90AB34541D6E} = {CDD3E5A6-7E4A-4BF2-A184-24B587D9C6D1}
 		{E9BAFECB-4D7F-40A9-9865-0ED75BD92B24} = {CDD3E5A6-7E4A-4BF2-A184-24B587D9C6D1}
 		{282AC1D8-893E-4F1E-979A-F1DAD3A934BD} = {CDD3E5A6-7E4A-4BF2-A184-24B587D9C6D1}
+		{2F049CFF-5FF5-4F5E-8594-5D3B4A2E4653} = {CDD3E5A6-7E4A-4BF2-A184-24B587D9C6D1}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {73D78DC4-5A61-4B64-BE43-83AA51349460}

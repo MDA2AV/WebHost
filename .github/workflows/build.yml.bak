@@ -25,7 +25,7 @@ jobs:
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '8.0' # Specify your .NET SDK version
+          dotnet-version: '9.0' # Specify your .NET SDK version
 
       # Restore dependencies
       - name: Restore dependencies
@@ -40,7 +40,7 @@ jobs:
 
       # Run tests
       - name: Run tests
-        run: dotnet test src/WebHost.csproj --no-build --verbosity normal
+        run: dotnet test Tests/Tests/Tests.csproj --no-build --verbosity normal
         
       - name: Publish to NuGet
         env:

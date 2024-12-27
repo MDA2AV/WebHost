@@ -199,7 +199,8 @@ public sealed partial class WebHostApp
             return middleware[index](context, async (ctx) => await Pipeline(ctx, index + 1, middleware));
         }
 
-        var endpoint = context.Scope.ServiceProvider.GetRequiredKeyedService<Func<IContext, Task>>(context.Request.Route);
+        var endpoint = context.Scope.ServiceProvider
+            .GetRequiredKeyedService<Func<IContext, Task>>($"{context.Request.HttpMethod}_{context.Request.Route}");
 
         return endpoint is null
             ? throw new InvalidOperationServiceException("Unable to find the Invoke method on the resolved service.")

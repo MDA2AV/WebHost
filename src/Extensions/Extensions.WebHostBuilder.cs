@@ -22,11 +22,59 @@ public static partial class Extensions
     /// - Registers a route-specific handler as a keyed scoped service.
     /// - Enables dynamic resolution of request handlers based on the route.
     /// </remarks>
-    public static WebHostApp.WebHostBuilder Map(this WebHostApp.WebHostBuilder builder, string route,
+    public static WebHostApp.WebHostBuilder MapGet(this WebHostApp.WebHostBuilder builder, string route,
         Func<IServiceProvider, Func<IContext, Task>> func)
     {
         builder.App.HostBuilder.ConfigureServices((_, services) =>
-            services.AddKeyedScoped<Func<IContext, Task>>(route, (sp, key) => func(sp)));
+            services.AddKeyedScoped<Func<IContext, Task>>($"GET_{route}", (sp, key) => func(sp)));
+
+        return builder;
+    }
+    public static WebHostApp.WebHostBuilder MapPost(this WebHostApp.WebHostBuilder builder, string route,
+        Func<IServiceProvider, Func<IContext, Task>> func)
+    {
+        builder.App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<IContext, Task>>($"POST{route}", (sp, key) => func(sp)));
+
+        return builder;
+    }
+    public static WebHostApp.WebHostBuilder MapPut(this WebHostApp.WebHostBuilder builder, string route,
+        Func<IServiceProvider, Func<IContext, Task>> func)
+    {
+        builder.App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<IContext, Task>>($"PUT_{route}", (sp, key) => func(sp)));
+
+        return builder;
+    }
+    public static WebHostApp.WebHostBuilder MapDelete(this WebHostApp.WebHostBuilder builder, string route,
+        Func<IServiceProvider, Func<IContext, Task>> func)
+    {
+        builder.App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<IContext, Task>>($"DELETE_{route}", (sp, key) => func(sp)));
+
+        return builder;
+    }
+    public static WebHostApp.WebHostBuilder MapPatch(this WebHostApp.WebHostBuilder builder, string route,
+        Func<IServiceProvider, Func<IContext, Task>> func)
+    {
+        builder.App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<IContext, Task>>($"PATCH_{route}", (sp, key) => func(sp)));
+
+        return builder;
+    }
+    public static WebHostApp.WebHostBuilder MapHead(this WebHostApp.WebHostBuilder builder, string route,
+        Func<IServiceProvider, Func<IContext, Task>> func)
+    {
+        builder.App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<IContext, Task>>($"HEAD_{route}", (sp, key) => func(sp)));
+
+        return builder;
+    }
+    public static WebHostApp.WebHostBuilder MapOptions(this WebHostApp.WebHostBuilder builder, string route,
+        Func<IServiceProvider, Func<IContext, Task>> func)
+    {
+        builder.App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<IContext, Task>>($"OPTIONS_{route}", (sp, key) => func(sp)));
 
         return builder;
     }

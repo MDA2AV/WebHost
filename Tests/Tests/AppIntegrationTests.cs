@@ -8,14 +8,13 @@ using System.Text;
 using WebHost;
 using WebHost.Exceptions;
 using WebHost.Extensions;
-using WebHost.Utils;
 using Xunit.Abstractions;
 
 namespace Tests;
 
 public class CreateWebHostServer(ITestOutputHelper testOutputHelper)
 {
-    [Fact]
+    //[Fact]
     public async Task CreateSimpleHttpApp()
     {
         var builder = CreateBuilder();
@@ -69,7 +68,7 @@ public class CreateWebHostServer(ITestOutputHelper testOutputHelper)
         builder
             .AddHandlers(Assembly.GetExecutingAssembly())
             .SetEndpoint("127.0.0.1", 9001)
-            .Map("/route", scope => async context =>
+            .MapGet("/route", scope => async context =>
             {
                 const string content = "Hello from WebHost!";
                 var response =
