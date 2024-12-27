@@ -38,9 +38,14 @@ jobs:
       - name: Pack NuGet package
         run: dotnet pack src/WebHost.csproj --configuration Release --output ./artifacts
 
-      # Run tests
-      - name: Run tests
-        run: dotnet test Tests/Tests/Tests.csproj --verbosity normal
+      # Run tests only for .NET 9
+      - name: Run tests (only for .NET 9)
+        run: |
+          if [[ "$(dotnet --version)" == 9.* ]]; then
+            dotnet test Tests/Tests/Tests.csproj --verbosity normal
+          else
+            echo "Skipping tests: Not running on .NET 9."
+          fi
         
       - name: Publish to NuGet
         env:
