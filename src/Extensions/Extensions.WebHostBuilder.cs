@@ -34,7 +34,7 @@ public static partial class Extensions
         Func<IServiceProvider, Func<IContext, Task>> func)
     {
         builder.App.HostBuilder.ConfigureServices((_, services) =>
-            services.AddKeyedScoped<Func<IContext, Task>>($"POST{route}", (sp, key) => func(sp)));
+            services.AddKeyedScoped<Func<IContext, Task>>($"POST_{route}", (sp, key) => func(sp)));
 
         return builder;
     }
