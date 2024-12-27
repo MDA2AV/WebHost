@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="WebHost" Version="9.0.1" />
+    <PackageReference Include="WebHost" Version="9.0.2" />
   </ItemGroup>
 
   <ItemGroup>

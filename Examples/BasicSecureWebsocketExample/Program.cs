@@ -81,7 +81,7 @@ internal class Program
                 };
             })
             .SetEndpoint("127.0.0.1", 9001)
-            .Map("/websocket", scope => async (context) =>
+            .MapGet("/websocket", scope => async (context) =>
             {
                 var buffer = new Memory<byte>(new byte[1024]);
 

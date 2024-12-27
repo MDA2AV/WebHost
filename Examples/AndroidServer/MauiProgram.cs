@@ -40,7 +40,7 @@ namespace AndroidServer
 
                 // Very basic example manually creating the http response and flushing it
                 //
-                .Map("/route", scope => async context =>
+                .MapGet("/route", scope => async context =>
                 {
                     const string content = "Hello from WebHost!";
                     var response =

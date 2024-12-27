@@ -37,7 +37,7 @@ internal class Program
 
             // Very basic example manually creating the http response and flushing it
             //
-            .Map("/route", scope => async context =>
+            .MapGet("/route", scope => async context =>
             {
                 const string content = "Hello from WebHost!";
                 var response = 
@@ -52,7 +52,7 @@ internal class Program
 
             // Basic example using a custom request handler to handle the endpoint and a custom response builder to send chunked data
             //
-            .Map("/route2", scope => async context =>
+            .MapGet("/route2", scope => async context =>
             {
                 // Printing to console received request data
                 //
@@ -81,7 +81,7 @@ internal class Program
             // Basic example using a custom request handler to handle the endpoint and System.Net.Http.HttpResponseMessage 
             // to build the http response
             //
-            .Map("/route3", scope => async context =>
+            .MapGet("/route3", scope => async context =>
             {
                 // Resolve the request handler
                 //

@@ -61,7 +61,7 @@ var host = WebHostApp.CreateBuilder()
     {
         options.ServerCertificate = LoadCertificate();
     })
-    .Map("/route", sp => async context =>
+    .MapGet("/route", sp => async context =>
     {
         // Access http request params
         //
