@@ -9,6 +9,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace WebHost;
 
@@ -192,20 +193,58 @@ public sealed partial class WebHostApp
     /// All elements are resolved within the context.Scope.IServiceProvider.
     /// </summary>
     /// <exception cref="InvalidOperationServiceException"></exception>
-    public static Task Pipeline(IContext context, int index, IList<Func<IContext, Func<IContext, Task>, Task>> middleware)
+    public Task Pipeline(IContext context, int index, IList<Func<IContext, Func<IContext, Task>, Task>> middleware)
     {
         if (index < middleware.Count)
         {
             return middleware[index](context, async (ctx) => await Pipeline(ctx, index + 1, middleware));
         }
 
+        var decodedRoute = MatchEndpoint(EncodedRoutes, context.Request.Route);
+
         var endpoint = context.Scope.ServiceProvider
-            .GetRequiredKeyedService<Func<IContext, Task>>($"{context.Request.HttpMethod}_{context.Request.Route}");
+            .GetRequiredKeyedService<Func<IContext, Task>>($"{context.Request.HttpMethod}_{decodedRoute}");
 
         return endpoint is null
             ? throw new InvalidOperationServiceException("Unable to find the Invoke method on the resolved service.")
             : endpoint.Invoke(context);
 
+    }
+
+    // Property to hold the encoded routes, initialized as an empty HashSet
+    public HashSet<string> EncodedRoutes { get; set; } = [];
+
+    /// <summary>
+    /// Matches a given input string against a set of encoded routes.
+    /// </summary>
+    /// <param name="hashSet">A HashSet containing route patterns.</param>
+    /// <param name="input">The input string to match against the patterns.</param>
+    /// <returns>The first matching route pattern from the HashSet, or null if no match is found.</returns>
+    public static string? MatchEndpoint(HashSet<string> hashSet, string input)
+    {
+        // Iterate through each route pattern in the HashSet
+        // Convert the pattern to a regex and check if the input matches
+        return (from entry in hashSet
+                let pattern = ConvertToRegex(entry) // Convert route pattern to regex
+                where Regex.IsMatch(input, pattern) // Check if input matches the regex
+                select entry) // Select the matching pattern
+            .FirstOrDefault(); // Return the first match or null if no match is found
+    }
+
+    /// <summary>
+    /// Converts a route pattern with placeholders (e.g., ":id") into a regular expression.
+    /// </summary>
+    /// <param name="pattern">The route pattern to convert.</param>
+    /// <returns>A regex string that matches the given pattern.</returns>
+    public static string ConvertToRegex(string pattern)
+    {
+        // Replace placeholders like ":id" with a regex pattern that matches any non-slash characters
+        var regexPattern = Regex.Replace(pattern, @":\w+", "[^/]+");
+
+        // Add anchors to ensure the regex matches the entire input string
+        regexPattern = $"^{regexPattern}$";
+
+        return regexPattern;
     }
 
     /// <summary>
