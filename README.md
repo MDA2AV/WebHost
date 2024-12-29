@@ -156,29 +156,25 @@ builder.UseMiddleware(scope => async (context, next) =>
 ### WebSocket Example
 
 ```csharp
-.Map("/websocket", scope => async (context) =>
+.MapGet("/websocket", scope => async (context) =>
 {
-    var logger = scope.GetRequiredService<ILogger<Program>>();
-
-    var buffer = new Memory<byte>(new byte[1024]);
+    var arrayPool = ArrayPool<byte>.Shared;
+    var buffer = arrayPool.Rent(10000000);
 
     while (true)
     {
         var receivedData = await context.WsReadAsync(buffer);
-        if (receivedData.Item1 == 0)
-        {
+
+        if (receivedData.Item2 == WsFrameType.Close)
             break;
-        }
 
-        logger.LogInformation("WebSocket Message: {Message}", receivedData.Item2);
-
-        if (receivedData.Item2.Equals("quit"))
-        {
+        if (receivedData.Item1.IsEmpty)
             break;
-        }
 
-        await context.WsSendAsync(receivedData.Item2);
+        await context.WsSendAsync(receivedData.Item1, 0x01);
     }
+
+    arrayPool.Return(buffer);
 });
 ```
 
