@@ -2,7 +2,7 @@
 using System.Text.RegularExpressions;
 using WebHost.Exceptions;
 
-namespace WebHost.Utils;
+namespace WebHost.Utils.HttpRequest;
 
 /// <summary>
 /// Provides utilities for parsing HTTP requests, including extracting routes and splitting headers from the body.

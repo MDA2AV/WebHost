@@ -1,4 +1,4 @@
-﻿using WebHost.Utils;
+﻿using WebHost.Utils.HttpRequest;
 
 namespace Tests.UtilsTests.HeaderParserTests;
 

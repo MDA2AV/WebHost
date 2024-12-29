@@ -2,6 +2,8 @@
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
+using WebHost.Enums;
+using WebHost.Utils.Websocket;
 
 namespace WebHost.Extensions;
 
@@ -58,7 +60,7 @@ public static partial class Extensions
     {
         if (context.SslStream is not null)
         {
-            await context.SslStream!.WriteAsync(responseBytes, cancellationToken);
+            await context.SslStream.WriteAsync(responseBytes, cancellationToken);
             await context.SslStream.FlushAsync(cancellationToken);
             return;
         }
@@ -110,13 +112,17 @@ public static partial class Extensions
     /// <exception cref="ConnectionClosedServiceException">
     /// Thrown if the connection is closed (no bytes are received).
     /// </exception>
-    public static async Task<(int, string)> WsReadAsync(this IContext context, Memory<byte> buffer, CancellationToken cancellationToken = default)
+    public static async Task<(ReadOnlyMemory<byte>, WsFrameType)> WsReadAsync(this IContext context, Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
         var receivedBytes = await context.ReadAsync(buffer, cancellationToken);
 
-        return receivedBytes == 0 
-            ? (receivedBytes, string.Empty) 
-            : (receivedBytes, context.DecodeMessage(buffer, receivedBytes));
+        if (receivedBytes == 0)
+        {
+            return (ReadOnlyMemory<byte>.Empty, WsFrameType.Close);
+        }
+
+        var decodedFrame = WebsocketUtilities.DecodeFrame(buffer, receivedBytes, out var frameType);
+        return (decodedFrame, frameType);
     }
 
     /// <summary>
@@ -124,164 +130,76 @@ public static partial class Extensions
     /// </summary>
     /// <param name="context">The <see cref="IContext"/> representing the current connection.</param>
     /// <param name="payload">The message to send as a string.</param>
+    /// <param name="opcode"></param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/> to signal operation cancellation.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    public static async Task WsSendAsync(this IContext context, string payload, CancellationToken cancellationToken = default)
+    public static async Task WsSendAsync(this IContext context, string payload, byte opcode = 0x01, CancellationToken cancellationToken = default)
     {
         // Send the response using the context
-        await context.WsSendAsync(Encoding.UTF8.GetBytes(payload).AsMemory(), cancellationToken);
+        await context.WsSendAsync(Encoding.UTF8.GetBytes(payload).AsMemory(), opcode, cancellationToken);
     }
 
     /// <summary>
-    /// Sends a WebSocket message with the specified payload to the context's connection.
-    /// </summary>
-    /// <param name="context">The <see cref="IContext"/> representing the current connection.</param>
-    /// <param name="payload">The payload to send as <see cref="ReadOnlyMemory{T}"/>.</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/> to signal operation cancellation.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    public static async Task WsSendAsync(this IContext context, ReadOnlyMemory<byte> payload, CancellationToken cancellationToken = default)
-    {
-        // Send the response using the context
-        await context.SendAsync(BuildWsFrame(payload), cancellationToken);
-    }
-
-    /// <summary>
-    /// Decodes a WebSocket frame received from a client by parsing the payload length,
-    /// handling masking (if present), and extracting the decoded UTF-8 message content.
+    /// Sends a WebSocket message with the specified payload to the client's connection, constructing the frame according to the WebSocket protocol.
+    /// 
+    /// This method wraps the payload in a WebSocket frame, including the necessary header and length information,
+    /// and sends it asynchronously to the client through the provided <paramref name="context"/>.
     /// </summary>
     /// <param name="context">
-    /// The IContext instance, representing the current communication context.
-    /// This parameter provides access to additional context-related utilities if needed.
+    /// The <see cref="IContext"/> representing the connection to the WebSocket client.
+    /// This provides the communication channel through which the frame will be sent.
     /// </param>
-    /// <param name="buffer">
-    /// A <see cref="Memory{byte}"/> object containing the raw WebSocket frame received from the client.
-    /// The buffer holds the complete frame, including headers, masking key (if present), and payload data.
+    /// <param name="payload">
+    /// The payload to send as a <see cref="ReadOnlyMemory{T}"/>. This can be raw binary data or UTF-8 encoded text,
+    /// depending on the <paramref name="opcode"/> specified.
     /// </param>
-    /// <param name="length">
-    /// The number of bytes in the <paramref name="buffer"/> representing the received WebSocket frame.
-    /// This value ensures that only the relevant portion of the buffer is processed.
+    /// <param name="opcode">
+    /// The opcode indicating the type of WebSocket frame to send. Valid values include:
+    /// <list type="bullet">
+    ///   <item><description><c>0x01</c>: Text frame (UTF-8 encoded text).</description></item>
+    ///   <item><description><c>0x02</c>: Binary frame (raw binary data).</description></item>
+    ///   <item><description>Control frames (<c>0x08</c>, <c>0x09</c>, <c>0x0A</c>): Close, Ping, and Pong respectively.</description></item>
+    /// </list>
+    /// The default value is <c>0x01</c>, which indicates a text frame.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// A <see cref="CancellationToken"/> that can be used to cancel the asynchronous operation.
+    /// This allows graceful interruption of the send operation if the token is triggered.
     /// </param>
     /// <returns>
-    /// A <see cref="string"/> containing the decoded UTF-8 message extracted from the WebSocket frame payload.
-    /// If the frame is masked (as required for client-to-server frames), the payload is unmasked before decoding.
+    /// A <see cref="Task"/> representing the asynchronous operation. This task completes when the frame has been sent to the client.
     /// </returns>
     /// <remarks>
-    /// This method supports standard WebSocket frame structures, including:
-    /// - Payload lengths up to 64 bits (with extended length fields for values >125).
-    /// - Masked client frames, unmasking the payload using the XOR operation and the 4-byte masking key.
+    /// <b>WebSocket Frame Construction:</b><br />
+    /// - The frame is constructed using <see cref="WebsocketUtilities.BuildWsFrame"/>.
+    /// - This includes setting the FIN bit, opcode, and appropriate payload length encoding as per the WebSocket protocol.
     /// 
-    /// Limitations:
-    /// - Assumes that the buffer contains a complete WebSocket frame.
-    /// - Does not handle WebSocket control frames (e.g., Ping, Pong, or Close frames).
+    /// <b>Performance Notes:</b><br />
+    /// - The method uses a pooled memory owner for efficient buffer reuse and minimizes unnecessary allocations.
+    /// - The frame memory is automatically disposed when the method completes, ensuring proper resource management.
     /// 
-    /// WebSocket frames consist of a header, an optional masking key (for client-to-server frames),
-    /// and the payload. This method extracts and decodes the payload according to the WebSocket protocol.
-    ///
-    /// Reference: RFC 6455 (The WebSocket Protocol)
+    /// <b>Usage Notes:</b><br />
+    /// - Use the appropriate opcode to match the payload type (e.g., <c>0x01</c> for text, <c>0x02</c> for binary).
+    /// - Ensure that the <paramref name="payload"/> is formatted correctly for the chosen opcode (e.g., UTF-8 for text frames).
     /// </remarks>
+    /// <example>
+    /// <code>
+    /// var payload = Encoding.UTF8.GetBytes("Hello, WebSocket!").AsMemory();
+    /// await context.WsSendAsync(payload, opcode: 0x01, cancellationToken: CancellationToken.None);
+    /// 
+    /// var binaryData = new byte[] { 0x01, 0x02, 0x03 }.AsMemory();
+    /// await context.WsSendAsync(binaryData, opcode: 0x02, cancellationToken: CancellationToken.None);
+    /// </code>
+    /// </example>
     /// <exception cref="ArgumentException">
-    /// Thrown if the payload length exceeds the buffer's capacity, indicating an incomplete or invalid frame.
+    /// Thrown if an invalid opcode is provided to the <paramref name="opcode"/> parameter.
     /// </exception>
-    public static string DecodeMessage(this IContext context, Memory<byte> buffer, int length)
+    public static async Task WsSendAsync(this IContext context, ReadOnlyMemory<byte> payload, byte opcode = 0x01, CancellationToken cancellationToken = default)
     {
-        var span = buffer.Span;
+        using var frameOwner = WebsocketUtilities.BuildWsFrame(payload, opcode: opcode);
+        var frameMemory = frameOwner.Memory;
 
-        // Validate minimum frame length
-        //
-        if (length < 2)
-        {
-            throw new ArgumentException("The frame is incomplete or invalid.", nameof(buffer));
-        }
-
-        // Check the MASK bit
-        //
-        var isMasked = (span[1] & 0x80) != 0;
-
-        // Extract payload length
-        //
-        var payloadLength = span[1] & 0x7F;
-        var payloadStart = 2;
-
-        switch (payloadLength)
-        {
-            // Adjust for extended payload lengths
-            //
-            case 126:
-                if (length < 4) throw new ArgumentException("The frame is incomplete or invalid.", nameof(buffer));
-                payloadLength = (span[2] << 8) | span[3]; // 16-bit length
-                payloadStart = 4;
-                break;
-            case 127:
-                // 64-bit length, not common, typically used for very large payloads
-                //
-                if (length < 10) throw new ArgumentException("The frame is incomplete or invalid.", nameof(buffer));
-                payloadLength = (int)(
-                    ((ulong)span[2] << 56) |
-                    ((ulong)span[3] << 48) |
-                    ((ulong)span[4] << 40) |
-                    ((ulong)span[5] << 32) |
-                    ((ulong)span[6] << 24) |
-                    ((ulong)span[7] << 16) |
-                    ((ulong)span[8] << 8) |
-                    span[9]);
-                payloadStart = 10;
-                break;
-        }
-
-        // Check if the total frame length is sufficient
-        //
-        if (length < payloadStart + payloadLength)
-        {
-            throw new ArgumentException("The frame is incomplete or invalid.", nameof(buffer));
-        }
-
-        // Extract the masking key if the MASK bit is set
-        //
-        var maskKey = Array.Empty<byte>();
-        if (isMasked)
-        {
-            if (length < payloadStart + 4) throw new ArgumentException("The frame is incomplete or invalid.", nameof(buffer));
-            maskKey = span.Slice(payloadStart, 4).ToArray();
-            payloadStart += 4;
-        }
-
-        // Extract and decode the payload
-        //
-        var payload = span.Slice(payloadStart, payloadLength).ToArray();
-
-        if (!isMasked)
-        {
-            return Encoding.UTF8.GetString(payload);
-        }
-        for (var i = 0; i < payload.Length; i++)
-        {
-            payload[i] ^= maskKey[i % 4]; // XOR with the masking key
-        }
-
-        // Return the decoded string
-        //
-        return Encoding.UTF8.GetString(payload);
-    }
-
-    /// <summary>
-    /// Builds a WebSocket frame from the specified payload.
-    /// </summary>
-    /// <param name="payload">The payload to include in the frame as <see cref="ReadOnlyMemory{T}"/>.</param>
-    /// <returns>The WebSocket frame as <see cref="ReadOnlyMemory{T}"/>.</returns>
-    private static ReadOnlyMemory<byte> BuildWsFrame(ReadOnlyMemory<byte> payload)
-    {
-        // Allocate the response memory dynamically
-        var responseLength = 2 + payload.Length;
-        var response = new Memory<byte>(new byte[responseLength]); // Memory-backed allocation
-
-        // Construct the WebSocket frame
-        var span = response.Span;
-        span[0] = 0x81; // Final frame, text data
-        span[1] = (byte)payload.Length; // Payload length
-
-        // Copy the payload into the response memory
-        payload.CopyTo(response[2..]);
-
-        return response;
+        // Send the frame to the WebSocket client
+        await context.SendAsync(frameMemory, cancellationToken);
     }
 }

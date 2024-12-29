@@ -3,13 +3,13 @@ using Microsoft.Extensions.Logging;
 using WebHost.Exceptions;
 using WebHost.Extensions;
 using WebHost.Models;
-using WebHost.Utils;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using WebHost.Utils.HttpRequest;
 
 namespace WebHost;
 
@@ -349,9 +349,20 @@ public sealed partial class WebHostApp
     }
 
     /// <summary>
+    /// Sends the WebSocket handshake response to the client based on the incoming request.
+    /// </summary>
+    /// <param name="context">The context representing the client connection.</param>
+    /// <param name="request">The raw HTTP WebSocket upgrade request from the client.</param>
+    /// <returns>A Task representing the asynchronous operation.</returns>
+    private static async Task SendHandshakeResponse(IContext context, string request)
+    {
+        // Send the response
+        await context.SendAsync(GenerateHandshakeResponse(request));
+    }
+
+    /// <summary>
     /// Creates a WebSocket handshake response for an incoming WebSocket upgrade request.
     /// </summary>
-    /// <param name="context"></param>
     /// <param name="request">
     /// The raw HTTP request string received from the client, which includes headers and the WebSocket key.
     /// </param>
@@ -375,46 +386,48 @@ public sealed partial class WebHostApp
     /// <exception cref="InvalidOperationException">
     /// Thrown if the `Sec-WebSocket-Key` header is not found in the request, indicating an invalid WebSocket upgrade request.
     /// </exception>
-    private static async Task SendHandshakeResponse(IContext context, string request)
+    private static ReadOnlyMemory<byte> GenerateHandshakeResponse(string request)
     {
         const string magicString = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
         // Predefined byte arrays for fixed parts of the response
-        ReadOnlyMemory<byte> fixedResponsePart = new byte[] {
-        0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x31, 0x30, 0x31, 0x20, 0x53, 0x77, 0x69, 0x74, 0x63, 0x68, 0x69, 0x6E, 0x67, 0x20, 0x50, 0x72, 0x6F, 0x74, 0x6F, 0x63, 0x6F, 0x6C, 0x73, 0x0D, 0x0A,
-        0x55, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x3A, 0x20, 0x77, 0x65, 0x62, 0x73, 0x6F, 0x63, 0x6B, 0x65, 0x74, 0x0D, 0x0A,
-        0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x55, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x0D, 0x0A,
-        0x53, 0x65, 0x63, 0x2D, 0x57, 0x65, 0x62, 0x53, 0x6F, 0x63, 0x6B, 0x65, 0x74, 0x2D, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20
-        };
+        var fixedResponsePart = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "u8;
+        var responseTerminator = "\r\n\r\n"u8;
 
-        ReadOnlyMemory<byte> responseTerminator = new byte[] { 0x0D, 0x0A, 0x0D, 0x0A };
+        // Extract the Sec-WebSocket-Key using ReadOnlySpan<char>
+        var requestSpan = request.AsSpan();
+        var keyLineStart = requestSpan.IndexOf("Sec-WebSocket-Key:".AsSpan(), StringComparison.OrdinalIgnoreCase);
 
-        // Extract the Sec-WebSocket-Key using a more robust method
-        var keyLine = request.Split(["\r\n"], StringSplitOptions.RemoveEmptyEntries)
-            .FirstOrDefault(line => line.StartsWith("Sec-WebSocket-Key:", StringComparison.OrdinalIgnoreCase));
-
-        if (keyLine == null)
+        if (keyLineStart == -1)
         {
             throw new InvalidOperationException("Sec-WebSocket-Key not found in the request.");
         }
 
-        var key = keyLine["Sec-WebSocket-Key:".Length..].Trim();
+        var keyLine = requestSpan.Slice(keyLineStart + "Sec-WebSocket-Key:".Length);
+        var keyEnd = keyLine.IndexOf("\r\n".AsSpan());
+        if (keyEnd != -1)
+        {
+            keyLine = keyLine[..keyEnd];
+        }
+
+        var key = keyLine.Trim();
 
         // Generate the Sec-WebSocket-Accept header value
         var acceptKey = Convert.ToBase64String(
-#pragma warning disable CA1850
-            SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(key + magicString))
-#pragma warning restore CA1850
+            SHA1.HashData(Encoding.UTF8.GetBytes(key.ToString() + magicString))
         );
 
         var acceptKeyBytes = Encoding.UTF8.GetBytes(acceptKey);
 
-        // Concatenate the byte arrays into a single ReadOnlyMemory<byte>
+        // Allocate the response byte array
         var responseBytes = new byte[fixedResponsePart.Length + acceptKeyBytes.Length + responseTerminator.Length];
-        fixedResponsePart.Span.CopyTo(responseBytes);
-        acceptKeyBytes.CopyTo(responseBytes.AsSpan(fixedResponsePart.Length));
-        responseTerminator.Span.CopyTo(responseBytes.AsSpan(fixedResponsePart.Length + acceptKeyBytes.Length));
 
-        await context.SendAsync(responseBytes.AsMemory());
+        // Build the response using Span<byte>
+        var responseSpan = responseBytes.AsSpan();
+        fixedResponsePart.CopyTo(responseSpan);
+        acceptKeyBytes.CopyTo(responseSpan[fixedResponsePart.Length..]);
+        responseTerminator.CopyTo(responseSpan[(fixedResponsePart.Length + acceptKeyBytes.Length)..]);
+
+        return responseBytes;
     }
 }
