@@ -2,7 +2,10 @@
 
 public enum WsFrameType
 {
+    Continue,
     Utf8,
     Binary,
-    Close
+    Close,
+    Ping,
+    Pong
 }

@@ -228,8 +228,11 @@ public static partial class WebsocketUtilities
         // Determine the frame type based on the opcode.
         frameType = opcode switch
         {
-            0x01 => WsFrameType.Utf8,   // Text frame (UTF-8 encoded).
-            0x02 => WsFrameType.Binary, // Binary frame.
+            0x00 => WsFrameType.Continue,   
+            0x01 => WsFrameType.Utf8,
+            0x02 => WsFrameType.Binary,
+            0x09 => WsFrameType.Ping,
+            0x0A => WsFrameType.Pong,
 #pragma warning disable S3928
             _ => throw new ArgumentOutOfRangeException(nameof(opcode)) // Invalid opcode.
 #pragma warning restore S3928
