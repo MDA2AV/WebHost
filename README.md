@@ -31,6 +31,15 @@ Microsoft.Extensions.Hosting (>= 9.0.0)
 - **HTTP/2.0**: In progress
 - **HTTP/3.0**: Not planned yet
 
+### Resource Hosting (Static pages)
+
+- Planned to be added
+ 
+### Websockets
+
+- RFC 6455 protocol
+- Missing fragmented frames support (to be added)
+
 ## Getting Started
 
 ### Prerequisites

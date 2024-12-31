@@ -31,6 +31,10 @@ Microsoft.Extensions.Hosting (>= 9.0.0)
 - **HTTP/2.0**: In progress
 - **HTTP/3.0**: Not planned yet
 
+### Resource Hosting (Static pages)
+
+ - Planned to be added
+
 ## Getting Started
 
 ### Prerequisites
@@ -61,7 +65,7 @@ var host = WebHostApp.CreateBuilder()
     {
         options.ServerCertificate = LoadCertificate();
     })
-    .Map("/route", sp => async context =>
+    .MapGet("/route", sp => async context =>
     {
         // Access http request params
         //
@@ -156,29 +160,25 @@ builder.UseMiddleware(scope => async (context, next) =>
 ### WebSocket Example
 
 ```csharp
-.Map("/websocket", scope => async (context) =>
+.MapGet("/websocket", scope => async (context) =>
 {
-    var logger = scope.GetRequiredService<ILogger<Program>>();
-
-    var buffer = new Memory<byte>(new byte[1024]);
+    var arrayPool = ArrayPool<byte>.Shared;
+    var buffer = arrayPool.Rent(10000000);
 
     while (true)
     {
         var receivedData = await context.WsReadAsync(buffer);
-        if (receivedData.Item1 == 0)
-        {
+
+        if (receivedData.Item2 == WsFrameType.Close)
             break;
-        }
 
-        logger.LogInformation("WebSocket Message: {Message}", receivedData.Item2);
-
-        if (receivedData.Item2.Equals("quit"))
-        {
+        if (receivedData.Item1.IsEmpty)
             break;
-        }
 
-        await context.WsSendAsync(receivedData.Item2);
+        await context.WsSendAsync(receivedData.Item1, 0x01);
     }
+
+    arrayPool.Return(buffer);
 });
 ```
 
