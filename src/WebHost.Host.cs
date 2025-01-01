@@ -24,6 +24,9 @@ public sealed partial class WebHostApp
     /// </remarks>
     public IHost InternalHost { get; set; } = null!;
 
+    // Property to hold the encoded routes, initialized as an empty HashSet
+    public HashSet<string> EncodedRoutes { get; set; } = [];
+
     /// <summary>
     /// Creates a new instance of the WebHostBuilder, which is used to configure and build a WebHostApp instance.
     /// </summary>

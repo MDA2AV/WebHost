@@ -5,6 +5,7 @@ using WebHost.Models;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -58,14 +59,41 @@ public sealed partial class WebHostApp
         await using var sslStream = new SslStream(new NetworkStream(client),
                                                   false,
                                                   SecurityOptions.ClientCertificateValidation);
+
+        var protocol = string.Empty;
+
         try
         {
             // Perform the TLS handshake
             //
+            var protocols = new List<SslApplicationProtocol>
+            {
+                SslApplicationProtocol.Http2,
+                SslApplicationProtocol.Http11,
+            };
+
+            //SslClientAuthenticationOptions a = new SslClientAuthenticationOptions();
+
+            var sslOptions = new SslServerAuthenticationOptions
+            {
+                ApplicationProtocols = protocols,
+                ServerCertificate = SecurityOptions.ServerCertificate,
+                EnabledSslProtocols = SslProtocols.Tls12,
+                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                ClientCertificateRequired = true,
+                RemoteCertificateValidationCallback = SecurityOptions.ClientCertificateValidation
+            };
+
+            await sslStream.AuthenticateAsServerAsync(sslOptions, stoppingToken);
+            /*
             await sslStream.AuthenticateAsServerAsync(SecurityOptions.ServerCertificate,
                                                         clientCertificateRequired: true,
                                                         enabledSslProtocols: SslProtocols.Tls12,
                                                         checkCertificateRevocation: false);
+            */
+
+            protocol = sslStream.NegotiatedApplicationProtocol.ToString();
+            Console.WriteLine($"Negotiated protocol: {protocol}");
         }
         catch (Exception ex) when (HandleTlsException(ex))
         {
@@ -76,7 +104,13 @@ public sealed partial class WebHostApp
 
         // Handle the client connection securely
         //
-        await HandleClientAsync1X(client, sslStream, stoppingToken);
+        var handler = protocol switch
+        {
+            "h2" => HandleClientAsync2(sslStream, stoppingToken),
+            _ => HandleClientAsync1X(client, sslStream, stoppingToken)
+        };
+
+        await handler;
     }
 
     /// <summary>
@@ -124,9 +158,6 @@ public sealed partial class WebHostApp
             : endpoint.Invoke(context);
 
     }
-
-    // Property to hold the encoded routes, initialized as an empty HashSet
-    public HashSet<string> EncodedRoutes { get; set; } = [];
 
     /// <summary>
     /// Matches a given input string against a set of encoded routes.

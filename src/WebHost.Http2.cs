@@ -1,30 +1,33 @@
-﻿using System.Net.Security;
+﻿using System;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Text;
 
 namespace WebHost;
 
 public sealed partial class WebHostApp
 {
-    public async Task HandleHttp2Connection(SslStream sslStream)
+    public async Task HandleClientAsync2(SslStream sslStream, CancellationToken cancellationToken)
     {
         Memory<byte> frameHeader = new byte[9];
         Memory<byte> preface = new byte[24];
 
-        _ = await sslStream.ReadAsync(preface);
+        _ = await sslStream.ReadAsync(preface, cancellationToken);
         if (!Http2Preface.SequenceEqual(preface.Span))
         {
             throw new Exception("Invalid HTTP/2 preface");
         }
 
-        await sslStream.WriteAsync(SettingsFrame);
-        _ = await sslStream.ReadAsync(frameHeader);
-        await sslStream.WriteAsync(SettingsAckFrame);
+        await sslStream.WriteAsync(SettingsFrame, cancellationToken);
+        _ = await sslStream.ReadAsync(frameHeader, cancellationToken);
+        await sslStream.WriteAsync(SettingsAckFrame, cancellationToken);
 
-        _ = await sslStream.ReadAsync(frameHeader);
+        _ = await sslStream.ReadAsync(frameHeader, cancellationToken);
         int length = (frameHeader.Span[0] << 16) | (frameHeader.Span[1] << 8) | frameHeader.Span[2];
 
         Memory<byte> headerPayload = new byte[length];
-        _ = await sslStream.ReadAsync(headerPayload);
-        await sslStream.WriteAsync(CreateHttp2Response());
+        _ = await sslStream.ReadAsync(headerPayload, cancellationToken);
+        await sslStream.WriteAsync(CreateHttp2Response(), cancellationToken);
     }
 
     private static ReadOnlyMemory<byte> CreateHttp2Response() =>
