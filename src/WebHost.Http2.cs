@@ -147,6 +147,9 @@ public sealed partial class WebHostApp
         await sslStream.WriteAsync(SettingsAckFrame.ToArray(), 0, SettingsAckFrame.Length, cancellationToken);
         Console.WriteLine("Sent SETTINGS ACK");
 
+        var decoder = new Http2.Hpack.Decoder();
+        var encoder = new Http2.Hpack.Encoder();
+
         while (true)
         {
             var frameData = await GetFrame(sslStream);
@@ -156,9 +159,22 @@ public sealed partial class WebHostApp
                 case 0x00:
                     string dataText = Encoding.UTF8.GetString(frameData.Payload);
                     Console.WriteLine($"DATA frame payload (text): {dataText}");
+
+                    Console.WriteLine($"Responding to {frameData.StreamId}");
+                    var encoded = EncodeFrame(encoder, frameData.StreamId);
+                    // Write the HEADERS frame
+                    Console.WriteLine("Sending response HEADER");
+                    await sslStream.WriteAsync(encoded.Item1, 0, encoded.Item1.Length, cancellationToken);
+                    await sslStream.FlushAsync(cancellationToken);
+
+                    Console.WriteLine("Sending response DATA");
+                    // Write the DATA frame
+                    await sslStream.WriteAsync(encoded.Item2, 0, encoded.Item2.Length, cancellationToken);
+                    await sslStream.FlushAsync(cancellationToken);
                     break;
                 case 0x01:
-                    var decoder = new Http2.Hpack.Decoder();
+
+                    Console.WriteLine($"Header contents: {BitConverter.ToString(frameData.Payload)}");
 
                     // Create a list to hold decoded headers
                     var headers = new List<HeaderField>();
@@ -259,17 +275,7 @@ public sealed partial class WebHostApp
             Memory<byte> headerPayload = new byte[length];
             _ = await sslStream.ReadAsync(headerPayload, cancellationToken);
 
-            var encoded = EncodeFrame();
-            // Write the HEADERS frame
-            Console.WriteLine("Sending response HEADER");
-            await sslStream.WriteAsync(encoded.Item1, 0, encoded.Item1.Length, cancellationToken);
-            await sslStream.FlushAsync(cancellationToken);
-
-            Console.WriteLine("Sending response DATA");
-            // Write the DATA frame
-            await sslStream.WriteAsync(encoded.Item2, 0, encoded.Item2.Length, cancellationToken);
-            await sslStream.FlushAsync(cancellationToken);
-
+           
 
             //await sslStream.WriteAsync(SettingsAckFrame, cancellationToken);
             bytesRead = await sslStream.ReadAsync(frameHeader, cancellationToken);
@@ -423,16 +429,6 @@ public sealed partial class WebHostApp
                         //await sslStream.WriteAsync(CreateHttp2Response(), cancellationToken);
                         //await sslStream.FlushAsync(cancellationToken);
                         //Console.WriteLine("200 OK sent");
-                        var encoded = EncodeFrame();
-                        // Write the HEADERS frame
-                        Console.WriteLine("Sending response HEADER");
-                        await sslStream.WriteAsync(encoded.Item1, 0, encoded.Item1.Length, cancellationToken);
-                        await sslStream.FlushAsync(cancellationToken);
-
-                        Console.WriteLine("Sending response DATA");
-                        // Write the DATA frame
-                        await sslStream.WriteAsync(encoded.Item2, 0, encoded.Item2.Length, cancellationToken);
-                        await sslStream.FlushAsync(cancellationToken);
 
                         breakLoop = true;
 
@@ -481,11 +477,8 @@ public sealed partial class WebHostApp
 
         return frame.ToArray();
     }
-    private (byte[], byte[]) EncodeFrame()
+    private (byte[], byte[]) EncodeFrame(Http2.Hpack.Encoder encoder, int streamId)
     {
-        // Initialize the HPACK encoder
-        var encoder = new Http2.Hpack.Encoder();
-
         // Create the headers
         var headers = new List<HeaderField>
         {
@@ -516,7 +509,7 @@ public sealed partial class WebHostApp
         var headersFrame = CreateFrame(
             type: 0x01, // HEADERS frame
             flags: 0x04, // END_HEADERS
-            streamId: 1, // Stream ID 1
+            streamId: streamId,
             payload: buffer[..result.UsedBytes] // Use only the used bytes
         );
 
@@ -524,7 +517,7 @@ public sealed partial class WebHostApp
         var dataFrame = CreateFrame(
             type: 0x00, // DATA frame
             flags: 0x01, // END_STREAM
-            streamId: 1, // Stream ID 1
+            streamId: streamId,
             payload: payload
         );
 
