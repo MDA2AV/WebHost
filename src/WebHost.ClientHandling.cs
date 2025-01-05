@@ -106,7 +106,7 @@ public sealed partial class WebHostApp
         //
         var handler = protocol switch
         {
-            "h2" => HandleClientAsync2(sslStream, stoppingToken),
+            "h2" => HandleClientAsync2x(sslStream, stoppingToken),
             _ => HandleClientAsync1X(client, sslStream, stoppingToken)
         };
 
