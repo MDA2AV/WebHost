@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using Http2.Hpack;
+using Microsoft.Extensions.DependencyInjection;
 using WebHost.Models;
 using static Http2.Hpack.DecoderExtensions;
 
@@ -163,7 +164,7 @@ public sealed partial class WebHostApp
             // New frame received!
             var frameData = await GetFrame(sslStream);
 
-            if (!streamBuffers.ContainsKey(frameData.FrameType))
+            if (!streamBuffers.ContainsKey(frameData.StreamId))
             {
                 if (frameData.FrameType == 0x01)
                 {
@@ -171,13 +172,7 @@ public sealed partial class WebHostApp
 
                     // Create queue for new stream
                     streamBuffers.Add(frameData.StreamId, new BlockingCollection<FrameData>());
-
-                    // Create a new context
-                    var context = new ContextH2(sslStream)
-                    {
-                        StreamBuffer = streamBuffers[frameData.StreamId]
-                    };
-
+                    
                     // Create a list to hold decoded headers
                     var headers = new List<HeaderField>();
 
@@ -188,19 +183,44 @@ public sealed partial class WebHostApp
                         headers: headers
                     );
 
-                    // Check the decoding result
-                    if (result.Status == DecodeStatus.Success)
+                    if (result.Status != DecodeStatus.Success) // Could not decode headers
+                        continue;
+
+                    foreach (var header in headers)
                     {
-                        Console.WriteLine("Headers decoded successfully:");
-                        foreach (var header in headers)
-                        {
-                            Console.WriteLine($"{header.Name}: {header.Value}");
-                        }
+                        Console.WriteLine($"{header.Name} {header.Value}");
                     }
-                    else
+
+                    var test = headers.FirstOrDefault(h => h.Name.Contains(":path"));
+                    Console.WriteLine($"test : {test}");
+                    Console.WriteLine($"test : {test.Value}");
+
+                    var fullRoute = headers.FirstOrDefault(h => h.Name.Contains(":path")).Value.Split('?');
+                    var httpMethod = headers.FirstOrDefault(h => h.Name.Contains(":method")).Value;
+
+                    // Create a new context
+                    var context = new H2Context(sslStream)
                     {
-                        Console.WriteLine($"Decoding failed with status: {result.Status}");
-                    }
+                        StreamBuffer = streamBuffers[frameData.StreamId],
+                        Request = new H2Request(headers, fullRoute[0], httpMethod, fullRoute[1]),
+                        Encoder = encoder,
+                        Decoder = decoder
+                    };
+
+                    // Create a new scope for handling the request
+                    //
+                    _ = Task.Factory.StartNew(async endpointContext =>
+                    {
+                        await using var scope = InternalHost.Services.CreateAsyncScope();
+                        context.Scope = scope;
+
+                        // Retrieve and execute the middleware pipeline
+                        //
+                        var middleware = scope.ServiceProvider.GetServices<Func<IContext, Func<IContext, Task>, Task>>().ToList();
+
+                        await Pipeline(context, 0, middleware);
+                    }, context, cancellationToken);
+
                 }
 
                 // Ignore this case!
@@ -215,6 +235,8 @@ public sealed partial class WebHostApp
             }
             streamBuffers[frameData.StreamId].Add(frameData, cancellationToken);
 
+
+            continue;
             switch (frameData.FrameType)
             {
                 case 0x00:
@@ -253,8 +275,7 @@ public sealed partial class WebHostApp
         }
     }
 
-    // DIOGO HERE, SERVER SHOULD SEND ES FRAME TOO, detect that client sent ES, respond and send ES too!
-    public async Task HandleClientAsync2(SslStream sslStream, CancellationToken cancellationToken)
+    public async Task HandleClientAsync2x2(SslStream sslStream, CancellationToken cancellationToken)
     {
         // Read the preface (24 bytes for HTTP/2.0 preface)
         var buffer = new byte[24];

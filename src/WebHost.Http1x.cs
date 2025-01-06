@@ -29,7 +29,7 @@ public sealed partial class WebHostApp
     /// </remarks>
     private async Task HandleClientAsync1X(Socket client, SslStream? sslStream, CancellationToken stoppingToken)
     {
-        var context = new Context(client)
+        var context = new H11Context(client)
         {
             SslStream = sslStream,
         };
@@ -64,7 +64,7 @@ public sealed partial class WebHostApp
 
             // Populate the context with the parsed request information
             //
-            context.Request = new Request(Headers: requestData.Item1,
+            context.Request = new H11Request(Headers: requestData.Item1,
                                           Body: requestData.Item2,
                                           Route: uriParams[0],
                                           QueryParameters: uriParams.Length > 1 ? uriParams[1] : string.Empty,

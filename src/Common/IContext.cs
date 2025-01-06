@@ -54,7 +54,7 @@ public interface IContext
     /// This property encapsulates the status code, headers, and content of an HTTP response.
     /// It can be used to configure or inspect the response in an HTTP client-server communication.
     /// </remarks>
-    HttpResponseMessage Response { get; set; }
+    //HttpResponseMessage Response { get; set; }
 
     /// <summary>
     /// Gets or sets the <see cref="Request"/> object representing the current client request.
@@ -63,7 +63,7 @@ public interface IContext
     /// - Contains details such as headers, body, route, and HTTP method.
     /// - Set during the request parsing phase and used throughout the request lifecycle.
     /// </remarks>
-    Request Request { get; set; }
+    IHttpRequest Request { get; set; }
 
     /// <summary>
     /// Gets or sets the <see cref="CancellationToken"/> for the current context.
