@@ -31,9 +31,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="http2dotnet.hpack" Version="0.8.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Http2\Hpack\" />
   </ItemGroup>
 
 </Project>

@@ -2,7 +2,7 @@
 using System.Collections.Concurrent;
 using System.Net.Security;
 using System.Net.Sockets;
-using Http2.Hpack;
+using WebHost.Hpack;
 
 namespace WebHost.Models;
 
@@ -12,27 +12,28 @@ public interface IHttpRequest
     string HttpMethod { get; init; }
 }
 
-public record H11Request(
+public record Http11Request(
     IEnumerable<string> Headers,
     string Body,
     string Route,
     string QueryParameters,
     string HttpMethod) : IHttpRequest;
 
-public record H2Request(
+public record Http2Request(
     IEnumerable<HeaderField> Headers, 
     string Route, 
     string HttpMethod, 
-    string QueryParameters) : IHttpRequest;
+    string QueryParameters,
+    int StreamId) : IHttpRequest;
 
-public class H11Context : IContext
+public class Http11Context : IContext
 {
-    public H11Context(Socket socket)
+    public Http11Context(Socket socket)
     {
         Socket = socket;
     }
 
-    public H11Context(SslStream sslStream)
+    public Http11Context(SslStream sslStream)
     {
         SslStream = sslStream;
     }
@@ -46,7 +47,7 @@ public class H11Context : IContext
     public CancellationToken CancellationToken { get; set; }
 }
 
-public class H2Context(SslStream sslStream) : IContext
+public class Http2Context(SslStream sslStream) : IContext
 {
     public Socket? Socket { get; set; }
     public SslStream? SslStream { get; set; } = sslStream;

@@ -5,10 +5,9 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using Http2.Hpack;
 using Microsoft.Extensions.DependencyInjection;
+using WebHost.Hpack;
 using WebHost.Models;
-using static Http2.Hpack.DecoderExtensions;
 
 namespace WebHost;
 
@@ -36,13 +35,6 @@ namespace WebHost;
 
 
  */
-
-public class StreamBuffer
-{
-    public string Headers { get; set; } // Store headers as a JSON string or parsed dictionary
-    public List<byte[]> DataFrames { get; set; } = []; // Buffer for data frames
-    public bool IsComplete { get; set; } = false; // Flag to indicate if the stream is complete
-}
 
 public class FrameData
 {
@@ -131,7 +123,6 @@ public sealed partial class WebHostApp
     public async Task HandleClientAsync2x(SslStream sslStream, CancellationToken cancellationToken)
     {
         #region Connection Handshake
-
         // Handle client connection preface and send
         var validPreface = await ValidatePreface(sslStream, cancellationToken);
 
@@ -143,20 +134,18 @@ public sealed partial class WebHostApp
 
         // Respond with SETTINGS frame
         await sslStream.WriteAsync(SettingsFrame.ToArray(), 0, SettingsFrame.Length, cancellationToken);
-        Console.WriteLine("Sent empty SETTINGS frame");
 
         // Receive SETTINGS frame
         _ = await GetFrame(sslStream);
 
         // Send SETTINGS Ack frame
         await sslStream.WriteAsync(SettingsAckFrame.ToArray(), 0, SettingsAckFrame.Length, cancellationToken);
-        Console.WriteLine("Sent SETTINGS ACK");
         #endregion
 
         var streamBuffers = new Dictionary<int, BlockingCollection<FrameData>>();
 
-        var decoder = new Http2.Hpack.Decoder();
-        var encoder = new Http2.Hpack.Encoder();
+        var decoder = new Hpack.Decoder();
+        var encoder = new Hpack.Encoder();
 
 
         while (!cancellationToken.IsCancellationRequested)
@@ -183,7 +172,7 @@ public sealed partial class WebHostApp
                         headers: headers
                     );
 
-                    if (result.Status != DecodeStatus.Success) // Could not decode headers
+                    if (result.Status != DecoderExtensions.DecodeStatus.Success) // Could not decode headers
                         continue;
 
                     foreach (var header in headers)
@@ -191,18 +180,14 @@ public sealed partial class WebHostApp
                         Console.WriteLine($"{header.Name} {header.Value}");
                     }
 
-                    var test = headers.FirstOrDefault(h => h.Name.Contains(":path"));
-                    Console.WriteLine($"test : {test}");
-                    Console.WriteLine($"test : {test.Value}");
-
                     var fullRoute = headers.FirstOrDefault(h => h.Name.Contains(":path")).Value.Split('?');
                     var httpMethod = headers.FirstOrDefault(h => h.Name.Contains(":method")).Value;
 
                     // Create a new context
-                    var context = new H2Context(sslStream)
+                    var context = new Http2Context(sslStream)
                     {
                         StreamBuffer = streamBuffers[frameData.StreamId],
-                        Request = new H2Request(headers, fullRoute[0], httpMethod, fullRoute[1]),
+                        Request = new Http2Request(headers, fullRoute[0], httpMethod, fullRoute[1], frameData.StreamId),
                         Encoder = encoder,
                         Decoder = decoder
                     };
@@ -228,12 +213,11 @@ public sealed partial class WebHostApp
             }
 
             // Received frame for existing stream, add it to the queue
+            streamBuffers[frameData.StreamId].Add(frameData, cancellationToken);
             if ((frameData.Flags & 0x01) == 0x01) // End stream flag is set
             {
                 streamBuffers[frameData.StreamId].CompleteAdding();
-                continue;
             }
-            streamBuffers[frameData.StreamId].Add(frameData, cancellationToken);
 
 
             continue;
@@ -322,8 +306,8 @@ public sealed partial class WebHostApp
         await sslStream.WriteAsync(SettingsAckFrame.ToArray(), 0, SettingsAckFrame.Length, cancellationToken);
         Console.WriteLine("Sent SETTINGS ACK");
 
-        var decoder = new Http2.Hpack.Decoder();
-        var encoder = new Http2.Hpack.Encoder();
+        var decoder = new Hpack.Decoder();
+        var encoder = new Hpack.Encoder();
 
         while (true)
         {
@@ -362,7 +346,7 @@ public sealed partial class WebHostApp
                     );
 
                     // Check the decoding result
-                    if (result.Status == DecodeStatus.Success)
+                    if (result.Status == DecoderExtensions.DecodeStatus.Success)
                     {
                         Console.WriteLine("Headers decoded successfully:");
                         foreach (var header in headers)
@@ -384,41 +368,65 @@ public sealed partial class WebHostApp
         }
     }
 
+    public byte[] EncodeHttp2Header(Hpack.Encoder encoder, IEnumerable<HeaderField> headers, byte type, byte flags, int streamId)
+    {
+        // Allocate a buffer for the header block
+        var buffer = new byte[1024];
+        var bufferSegment = new ArraySegment<byte>(buffer);
+
+        // Encode the headers
+        var result = encoder.EncodeInto(bufferSegment, headers);
+
+        if (result.FieldCount == 0)
+        {
+            Console.WriteLine("Failed to encode headers: Buffer too small.");
+            return [];
+        }
+
+        // Construct the HEADERS frame
+        var headersFrame = CreateFrame(
+            type: 0x01, // HEADERS frame
+            flags: 0x04, // END_HEADERS
+            streamId: streamId,
+            payload: buffer[..result.UsedBytes] // Use only the used bytes
+        );
+
+        return headersFrame;
+    }
+
     private static byte[] CreateFrame(byte type, byte flags, int streamId, byte[] payload)
     {
-        var frame = new List<byte>();
-
-        // Add the length (24 bits)
-        frame.Add((byte)((payload.Length >> 16) & 0xFF));
-        frame.Add((byte)((payload.Length >> 8) & 0xFF));
-        frame.Add((byte)(payload.Length & 0xFF));
-
-        // Add the type
-        frame.Add(type);
-
-        // Add the flags
-        frame.Add(flags);
-
-        // Add the stream ID (31 bits, MSB is reserved and must be 0)
-        frame.Add((byte)((streamId >> 24) & 0x7F));
-        frame.Add((byte)((streamId >> 16) & 0xFF));
-        frame.Add((byte)((streamId >> 8) & 0xFF));
-        frame.Add((byte)(streamId & 0xFF));
+        var frame = new List<byte>
+        {
+            // Add the length (24 bits)
+            (byte)((payload.Length >> 16) & 0xFF),
+            (byte)((payload.Length >> 8) & 0xFF),
+            (byte)(payload.Length & 0xFF),
+            // Add the type
+            type,
+            // Add the flags
+            flags,
+            // Add the stream ID (31 bits, MSB is reserved and must be 0)
+            (byte)((streamId >> 24) & 0x7F),
+            (byte)((streamId >> 16) & 0xFF),
+            (byte)((streamId >> 8) & 0xFF),
+            (byte)(streamId & 0xFF)
+        };
 
         // Add the payload
         frame.AddRange(payload);
 
         return frame.ToArray();
     }
-    private (byte[], byte[]) EncodeFrame(Http2.Hpack.Encoder encoder, int streamId)
+    public static (byte[], byte[]) EncodeFrame(Hpack.Encoder encoder, int streamId)
     {
         // Create the headers
-        var headers = new List<HeaderField>
-        {
+        List<HeaderField> headers =
+        [
             new HeaderField { Name = ":status", Value = "200", Sensitive = false },
             new HeaderField { Name = "content-type", Value = "text/plain", Sensitive = false },
-            new HeaderField { Name = "content-length", Value = "5", Sensitive = false } // Length of "Hello"
-        };
+            new HeaderField { Name = "content-length", Value = "5", Sensitive = false }
+        ];
 
         // Allocate a buffer for the header block
         var buffer = new byte[1024];
@@ -431,12 +439,9 @@ public sealed partial class WebHostApp
         {
             Console.WriteLine("Failed to encode headers: Buffer too small.");
             return ([], []);
+
         }
-
         Console.WriteLine($"Encoded {result.FieldCount} headers using {result.UsedBytes} bytes.");
-
-        // Create the payload
-        var payload = Encoding.UTF8.GetBytes("Hello");
 
         // Construct the HEADERS frame
         var headersFrame = CreateFrame(
@@ -445,6 +450,9 @@ public sealed partial class WebHostApp
             streamId: streamId,
             payload: buffer[..result.UsedBytes] // Use only the used bytes
         );
+
+        // Create the payload
+        var payload = "Hello"u8.ToArray();
 
         // Construct the DATA frame
         var dataFrame = CreateFrame(
