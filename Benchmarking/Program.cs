@@ -1,4 +1,5 @@
-﻿using BenchmarkDotNet.Running;
+﻿using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Running;
 
 namespace Benchmarking;
 
@@ -6,6 +7,9 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        BenchmarkRunner.Run<MemoryBenchmark>();
+        var config = DefaultConfig.Instance
+            .WithOptions(ConfigOptions.DisableOptimizationsValidator);
+
+        BenchmarkRunner.Run<HeaderEncodingBenchmark>(config);
     }
 }

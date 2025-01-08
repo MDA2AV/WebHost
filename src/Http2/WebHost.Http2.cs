@@ -187,7 +187,14 @@ public sealed partial class WebHostApp
                     var context = new Http2Context(sslStream)
                     {
                         StreamBuffer = streamBuffers[frameData.StreamId],
-                        Request = new Http2Request(headers, fullRoute[0], httpMethod, fullRoute[1], frameData.StreamId),
+                        Request = new Http2Request(
+                            headers
+                                .Select(header => $"{header.Name}: {header.Value}")
+                                .ToList(), 
+                            fullRoute[0], 
+                            httpMethod, 
+                            fullRoute[1], 
+                            frameData.StreamId),
                         Encoder = encoder,
                         Decoder = decoder
                     };

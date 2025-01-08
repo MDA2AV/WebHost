@@ -8,7 +8,9 @@ namespace WebHost.Models;
 
 public interface IHttpRequest
 {
+    IEnumerable<string> Headers { get; init; }
     string Route { get; init; }
+    string QueryParameters { get; init; }
     string HttpMethod { get; init; }
 }
 
@@ -20,7 +22,7 @@ public record Http11Request(
     string HttpMethod) : IHttpRequest;
 
 public record Http2Request(
-    IEnumerable<HeaderField> Headers, 
+    IEnumerable<string> Headers, 
     string Route, 
     string HttpMethod, 
     string QueryParameters,

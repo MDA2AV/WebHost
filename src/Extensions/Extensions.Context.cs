@@ -22,7 +22,7 @@ public static partial class Extensions
     /// <exception cref="ArgumentNullServiceException">
     /// Thrown if <paramref name="responseBuilder"/> is <c>null</c>.
     /// </exception>
-    public static async Task Respond(this IContext context, IResponseBuilder responseBuilder, CancellationToken cancellationToken = default)
+    public static async Task RespondAsync(this IContext context, IResponseBuilder responseBuilder, CancellationToken cancellationToken = default)
     {
         if (responseBuilder == null)
         {
