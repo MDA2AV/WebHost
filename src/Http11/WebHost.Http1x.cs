@@ -155,21 +155,14 @@ public sealed partial class WebHostApp
         throw new InvalidOperationException("No valid client stream available for reading.");
     }
 
-    /// <summary>
-    /// Sends the WebSocket handshake response to the client based on the incoming request.
-    /// </summary>
-    /// <param name="context">The context representing the client connection.</param>
-    /// <param name="request">The raw HTTP WebSocket upgrade request from the client.</param>
-    /// <returns>A Task representing the asynchronous operation.</returns>
-    private static async Task SendHandshakeResponse(IContext context, string request)
-    {
-        // Send the response
-        await context.SendAsync(GenerateHandshakeResponse(request));
-    }
+    private static readonly ReadOnlyMemory<byte> WebsocketHandshakePrefix 
+        = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "u8.ToArray();
+    private static readonly ReadOnlyMemory<byte> WebsocketHandshakeSuffix = "\r\n\r\n"u8.ToArray();
 
     /// <summary>
     /// Creates a WebSocket handshake response for an incoming WebSocket upgrade request.
     /// </summary>
+    /// <param name="context"></param>
     /// <param name="request">
     /// The raw HTTP request string received from the client, which includes headers and the WebSocket key.
     /// </param>
@@ -193,13 +186,16 @@ public sealed partial class WebHostApp
     /// <exception cref="InvalidOperationException">
     /// Thrown if the `Sec-WebSocket-Key` header is not found in the request, indicating an invalid WebSocket upgrade request.
     /// </exception>
-    private static ReadOnlyMemory<byte> GenerateHandshakeResponse(string request)
+    private static async Task SendHandshakeResponse(IContext context, string request)
+    {
+        await context.SendAsync(WebsocketHandshakePrefix);
+        await context.SendAsync(CreateAcceptKey(request));
+        await context.SendAsync(WebsocketHandshakeSuffix);
+    }
+
+    private static string CreateAcceptKey(string request)
     {
         const string magicString = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-
-        // Predefined byte arrays for fixed parts of the response
-        var fixedResponsePart = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "u8;
-        var responseTerminator = "\r\n\r\n"u8;
 
         // Extract the Sec-WebSocket-Key using ReadOnlySpan<char>
         var requestSpan = request.AsSpan();
@@ -220,21 +216,7 @@ public sealed partial class WebHostApp
         var key = keyLine.Trim();
 
         // Generate the Sec-WebSocket-Accept header value
-        var acceptKey = Convert.ToBase64String(
-            SHA1.HashData(Encoding.UTF8.GetBytes(key.ToString() + magicString))
-        );
-
-        var acceptKeyBytes = Encoding.UTF8.GetBytes(acceptKey);
-
-        // Allocate the response byte array
-        var responseBytes = new byte[fixedResponsePart.Length + acceptKeyBytes.Length + responseTerminator.Length];
-
-        // Build the response using Span<byte>
-        var responseSpan = responseBytes.AsSpan();
-        fixedResponsePart.CopyTo(responseSpan);
-        acceptKeyBytes.CopyTo(responseSpan[fixedResponsePart.Length..]);
-        responseTerminator.CopyTo(responseSpan[(fixedResponsePart.Length + acceptKeyBytes.Length)..]);
-
-        return responseBytes;
+        return Convert.ToBase64String(
+            SHA1.HashData(Encoding.UTF8.GetBytes(key.ToString() + magicString)));
     }
 }
