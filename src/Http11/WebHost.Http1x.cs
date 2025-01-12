@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Buffers;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -22,7 +23,7 @@ public sealed partial class WebHostApp
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     /// <remarks>
     /// - Reads the client request and parses its headers, body, and route information.
-    /// - Validates the request's structure and initializes the <see cref="Request"/> property.
+    /// - Validates the request's structure and initializes the <see cref="Http11Request"/> property.
     /// - Creates a scoped service provider for each request and executes the middleware pipeline.
     /// - Handles "keep-alive" connections by continuing to process additional requests from the same client.
     /// - Closes the connection when the request does not include "keep-alive" or upon invalid input.
@@ -111,7 +112,8 @@ public sealed partial class WebHostApp
     /// </remarks>
     private async Task<string?> GetClientRequest(IContext context, CancellationToken stoppingToken)
     {
-        var buffer = new Memory<byte>(new byte[1024]);
+        //var buffer = new Memory<byte>(new byte[512]);
+        var buffer = _bufferPool.Rent(512);
         var receivedBytesNumber = await ReadFromClientAsync(context, buffer, stoppingToken);
 
         if (receivedBytesNumber == 0)
@@ -120,11 +122,13 @@ public sealed partial class WebHostApp
             return null;
         }
 
-        var request = DecodeRequest(buffer[..receivedBytesNumber]);
+        //var request = DecodeRequest(buffer[..receivedBytesNumber]);
+        var request = DecodeRequest(buffer.AsSpan(0, receivedBytesNumber));
         _logger?.LogTrace("Received: {Request}", request);
 
         return request;
     }
+    private static readonly ArrayPool<byte> _bufferPool = ArrayPool<byte>.Shared;
 
     /// <summary>
     /// Reads data from the client using either an SSL stream or a raw socket.

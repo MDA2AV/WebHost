@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.Buffers;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using WebHost.Exceptions;
 using WebHost.Models;
@@ -93,7 +94,7 @@ public sealed partial class WebHostApp
             */
 
             protocol = sslStream.NegotiatedApplicationProtocol.ToString();
-            Console.WriteLine($"Negotiated protocol: {protocol}");
+            //Console.WriteLine($"Negotiated protocol: {protocol}");
         }
         catch (Exception ex) when (HandleTlsException(ex))
         {
@@ -201,9 +202,9 @@ public sealed partial class WebHostApp
     /// - Uses the <see cref="Encoding.UTF8"/> class to decode the buffer.
     /// - Ensures the original memory buffer is not modified by working with <see cref="ReadOnlyMemory{T}"/>.
     /// </remarks>
-    private static string DecodeRequest(ReadOnlyMemory<byte> buffer)
+    private static string DecodeRequest(ReadOnlySpan<byte> buffer)
     {
-        return Encoding.UTF8.GetString(buffer.Span);
+        return Encoding.UTF8.GetString(buffer);
     }
 
     /// <summary>

@@ -96,9 +96,7 @@ public sealed partial class WebHostApp
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                Console.WriteLine("Waiting for a client..");
                 var client = await socket.AcceptAsync(stoppingToken);
-                Console.WriteLine("Client connected!");
 
                 // Fire and forget
                 //
