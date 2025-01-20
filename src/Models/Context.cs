@@ -28,20 +28,12 @@ public record Http2Request(
     string QueryParameters,
     int StreamId) : IHttpRequest;
 
-public class Http11Context : IContext
+public class Http11Context(Stream stream) : IContext
 {
-    public Http11Context(Socket socket)
-    {
-        Socket = socket;
-    }
+    //public Socket? Socket { get; set; }
+    public Stream Stream { get; set; } = stream;
 
-    public Http11Context(SslStream sslStream)
-    {
-        SslStream = sslStream;
-    }
-
-    public Socket? Socket { get; set; }
-    public SslStream? SslStream { get; set; }
+    //public SslStream? SslStream { get; set; }
     public AsyncServiceScope Scope { get; set; }
     public T Resolve<T>() where T : notnull => Scope.ServiceProvider.GetRequiredService<T>();
     public IHttpRequest Request { get; set; } = null!;
@@ -49,10 +41,11 @@ public class Http11Context : IContext
     public CancellationToken CancellationToken { get; set; }
 }
 
-public class Http2Context(SslStream sslStream) : IContext
+public class Http2Context(Stream stream) : IContext
 {
-    public Socket? Socket { get; set; }
-    public SslStream? SslStream { get; set; } = sslStream;
+    //public Socket? Socket { get; set; }
+    public Stream Stream { get; set; } = stream;
+    //public SslStream? SslStream { get; set; } = sslStream;
     public AsyncServiceScope Scope { get; set; }
     public T Resolve<T>() where T : notnull => Scope.ServiceProvider.GetRequiredService<T>();
     public IHttpRequest Request { get; set; } = null!;

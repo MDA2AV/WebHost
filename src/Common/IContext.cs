@@ -18,7 +18,9 @@ public interface IContext
     /// - Used for plain (non-TLS) communication.
     /// - May be <c>null</c> if the connection is using TLS.
     /// </remarks>
-    Socket? Socket { get; set; }
+    //Socket? Socket { get; set; }
+
+    Stream Stream { get; set; }
 
     /// <summary>
     /// Gets or sets the <see cref="SslStream"/> for secure (TLS) communication with the client.
@@ -27,7 +29,7 @@ public interface IContext
     /// - Used for encrypted communication.
     /// - May be <c>null</c> if the connection is not using TLS.
     /// </remarks>
-    SslStream? SslStream { get; set; }
+    //SslStream? SslStream { get; set; }
 
     /// <summary>
     /// Gets or sets the service scope for resolving scoped services during the lifecycle of the request.

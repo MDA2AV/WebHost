@@ -42,7 +42,6 @@ public static partial class Extensions
     public static async Task SendAsync(this IContext context, string response, CancellationToken cancellationToken = default)
     {
         var responseBytes = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(response));
-
         await SendAsync(context, responseBytes, cancellationToken);
     }
 
@@ -58,19 +57,8 @@ public static partial class Extensions
     /// </exception>
     public static async Task SendAsync(this IContext context, ReadOnlyMemory<byte> responseBytes, CancellationToken cancellationToken = default)
     {
-        if (context.SslStream is not null)
-        {
-            await context.SslStream.WriteAsync(responseBytes, cancellationToken);
-            await context.SslStream.FlushAsync(cancellationToken);
-            return;
-        }
-
-        if (context.Socket is null)
-        {
-            throw new ServiceUnavailableServiceException("[56235]Socket not found.");
-        }
-
-        await context.Socket!.SendAsync(responseBytes, cancellationToken);
+        await context.Stream.WriteAsync(responseBytes, cancellationToken);
+        await context.Stream.FlushAsync(cancellationToken);
     }
 
     /// <summary>
@@ -87,17 +75,7 @@ public static partial class Extensions
     /// </exception>
     public static async Task<int> ReadAsync(this IContext context, Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
-        if (context.SslStream is not null)
-        {
-            return await context.SslStream.ReadAsync(buffer, cancellationToken);
-        }
-
-        if (context.Socket is not null)
-        {
-            return await context.Socket.ReceiveAsync(buffer, cancellationToken);
-        }
-
-        throw new ServiceUnavailableServiceException("[56235]Socket not found.");
+        return await context.Stream.ReadAsync(buffer, cancellationToken);
     }
 
     /// <summary>

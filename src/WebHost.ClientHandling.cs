@@ -9,6 +9,9 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.IO.Pipelines;
+using System.IO;
+using System.Xml.Linq;
 
 namespace WebHost;
 
@@ -28,7 +31,9 @@ public sealed partial class WebHostApp
     /// </remarks>
     private async Task HandlePlainClientAsync(Socket client, CancellationToken stoppingToken)
     {
-        await HandleClientAsync1X(client, null, stoppingToken);
+        StreamPipeReaderOptions readerOptions = new(MemoryPool<byte>.Shared, leaveOpen: true, bufferSize: 65535);
+        var stream = new NetworkStream(client);
+        await HandleClientAsync1X(stream, PipeReader.Create(stream, readerOptions), stoppingToken);
     }
 
     /// <summary>
@@ -108,7 +113,11 @@ public sealed partial class WebHostApp
         var handler = protocol switch
         {
             "h2" => HandleClientAsync2x(sslStream, stoppingToken),
-            _ => HandleClientAsync1X(client, sslStream, stoppingToken)
+            _ => HandleClientAsync1X(
+                sslStream, 
+                PipeReader.Create(sslStream, 
+                                  new StreamPipeReaderOptions(MemoryPool<byte>.Shared, leaveOpen: true, bufferSize: 65535)), 
+                                  stoppingToken)
         };
 
         await handler;

@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System;
 using System.Buffers;
-using System.Net.Security;
-using System.Net.Sockets;
+using System.IO.Pipelines;
 using System.Security.Cryptography;
 using System.Text;
 using WebHost.Exceptions;
@@ -17,9 +17,8 @@ public sealed partial class WebHostApp
     /// <summary>
     /// Handles a client connection by processing incoming requests and executing the middleware pipeline.
     /// </summary>
-    /// <param name="sslStream"></param>
+    /// <param name="stream"></param>
     /// <param name="stoppingToken">A <see cref="CancellationToken"/> to signal when the operation should stop.</param>
-    /// <param name="client"></param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     /// <remarks>
     /// - Reads the client request and parses its headers, body, and route information.
@@ -28,16 +27,17 @@ public sealed partial class WebHostApp
     /// - Handles "keep-alive" connections by continuing to process additional requests from the same client.
     /// - Closes the connection when the request does not include "keep-alive" or upon invalid input.
     /// </remarks>
-    private async Task HandleClientAsync1X(Socket client, SslStream? sslStream, CancellationToken stoppingToken)
+    private async Task HandleClientAsync1X(Stream stream, PipeReader pipeReader, CancellationToken stoppingToken)
     {
-        var context = new Http11Context(client)
-        {
-            SslStream = sslStream,
-        };
+        var context = new Http11Context(stream);
 
         // Read the initial client request
         //
-        var request = await GetClientRequest(context, stoppingToken);
+        //var request = await GetClientRequest(context, stoppingToken);
+
+        var rec = await ExtractHeaders(pipeReader);
+        var request = rec.Item1;
+        pipeReader.AdvanceTo(rec.Item2);
 
         // Loop to handle multiple requests for "keep-alive" connections
         //
@@ -88,7 +88,10 @@ public sealed partial class WebHostApp
             //
             if (request.Contains("Connection: keep-alive"))
             {
-                request = await GetClientRequest(context, stoppingToken); // Read the next request
+                //request = await GetClientRequest(context, stoppingToken); // Read the next request
+                rec = await ExtractHeaders(pipeReader);
+                request = rec.Item1;
+                pipeReader.AdvanceTo(rec.Item2);
             }
             else
             {
@@ -112,9 +115,8 @@ public sealed partial class WebHostApp
     /// </remarks>
     private async Task<string?> GetClientRequest(IContext context, CancellationToken stoppingToken)
     {
-        //var buffer = new Memory<byte>(new byte[512]);
-        var buffer = _bufferPool.Rent(512);
-        var receivedBytesNumber = await ReadFromClientAsync(context, buffer, stoppingToken);
+        var buffer = BufferPool.Rent(512);
+        var receivedBytesNumber = await context.ReadAsync(buffer, cancellationToken: stoppingToken);
 
         if (receivedBytesNumber == 0)
         {
@@ -122,42 +124,12 @@ public sealed partial class WebHostApp
             return null;
         }
 
-        //var request = DecodeRequest(buffer[..receivedBytesNumber]);
         var request = DecodeRequest(buffer.AsSpan(0, receivedBytesNumber));
         _logger?.LogTrace("Received: {Request}", request);
 
         return request;
     }
-    private static readonly ArrayPool<byte> _bufferPool = ArrayPool<byte>.Shared;
-
-    /// <summary>
-    /// Reads data from the client using either an SSL stream or a raw socket.
-    /// </summary>
-    /// <param name="context">The <see cref="IContext"/> representing the client connection.</param>
-    /// <param name="buffer">A <see cref="Memory{T}"/> buffer to store the received data.</param>
-    /// <param name="stoppingToken">A <see cref="CancellationToken"/> to signal when the operation should stop.</param>
-    /// <returns>
-    /// A <see cref="Task"/> that resolves to the number of bytes received from the client.
-    /// </returns>
-    /// <remarks>
-    /// - Determines the appropriate input stream (SSL or raw socket) from the context.
-    /// - Throws an exception if neither stream is available.
-    /// </remarks>
-    /// <exception cref="InvalidOperationException">Thrown if no valid client stream is available for reading.</exception>
-    private static async Task<int> ReadFromClientAsync(IContext context, Memory<byte> buffer, CancellationToken stoppingToken)
-    {
-        if (context.SslStream is not null)
-        {
-            return await context.SslStream.ReadAsync(buffer, stoppingToken);
-        }
-
-        if (context.Socket is not null)
-        {
-            return await context.Socket.ReceiveAsync(buffer, SocketFlags.None, stoppingToken);
-        }
-
-        throw new InvalidOperationException("No valid client stream available for reading.");
-    }
+    private static readonly ArrayPool<byte> BufferPool = ArrayPool<byte>.Shared;
 
     private static readonly ReadOnlyMemory<byte> WebsocketHandshakePrefix 
         = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "u8.ToArray();
