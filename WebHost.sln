@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AndroidServer", "Examples\A
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Benchmarking", "Benchmarking\Benchmarking.csproj", "{F3F470F4-D6B8-400F-8BA5-7E2C466A7C83}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Http2", "Http2\Http2.csproj", "{EC6B7766-2183-4CE4-864F-9C688C92004A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -67,6 +69,10 @@ Global
 		{F3F470F4-D6B8-400F-8BA5-7E2C466A7C83}.Debug|Any CPU.Build.0 = Release|Any CPU
 		{F3F470F4-D6B8-400F-8BA5-7E2C466A7C83}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F3F470F4-D6B8-400F-8BA5-7E2C466A7C83}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EC6B7766-2183-4CE4-864F-9C688C92004A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EC6B7766-2183-4CE4-864F-9C688C92004A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EC6B7766-2183-4CE4-864F-9C688C92004A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EC6B7766-2183-4CE4-864F-9C688C92004A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

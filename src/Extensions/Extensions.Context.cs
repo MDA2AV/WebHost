@@ -53,7 +53,6 @@ public static partial class Extensions
     /// <param name="cancellationToken"></param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     /// <exception cref="ServiceUnavailableServiceException">
-    /// Thrown if neither <see cref="IContext.SslStream"/> nor <see cref="IContext.Socket"/> is available.
     /// </exception>
     public static async Task SendAsync(this IContext context, ReadOnlyMemory<byte> responseBytes, CancellationToken cancellationToken = default)
     {

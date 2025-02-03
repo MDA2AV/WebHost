@@ -12,6 +12,7 @@ public sealed partial class WebHostApp
     private IPAddress _ipAddress = IPAddress.Parse("127.0.0.1");
     private int _port = 9001;
     private int _backlog = 10;
+    private bool _useStandardHttp11Version = true;
 
     private ILoggerFactory? _loggerFactory;
     private ILogger? _logger;
@@ -90,6 +91,12 @@ public sealed partial class WebHostApp
         public WebHostBuilder SetBacklog(int backlog)
         {
             App._backlog = backlog;
+            return this;
+        }
+
+        public WebHostBuilder UseHttp11Multiplexed()
+        {
+            App._useStandardHttp11Version = false;
             return this;
         }
     }

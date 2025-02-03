@@ -184,9 +184,8 @@ public sealed partial class WebHostApp
                     var httpMethod = headers.FirstOrDefault(h => h.Name.Contains(":method")).Value;
 
                     // Create a new context
-                    var context = new Http2Context(sslStream)
+                    var context = new Context(sslStream)
                     {
-                        StreamBuffer = streamBuffers[frameData.StreamId],
                         Request = new Http2Request(
                             headers
                                 .Select(header => $"{header.Name}: {header.Value}")
@@ -195,8 +194,12 @@ public sealed partial class WebHostApp
                             httpMethod, 
                             fullRoute[1], 
                             frameData.StreamId),
-                        Encoder = encoder,
-                        Decoder = decoder
+                        Http2 = new Models.Http2
+                        {
+                            StreamBuffer = streamBuffers[frameData.StreamId],
+                            Encoder = encoder,
+                            Decoder = decoder
+                        }
                     };
 
                     // Create a new scope for handling the request

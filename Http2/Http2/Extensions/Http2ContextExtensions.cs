@@ -8,7 +8,7 @@ namespace WebHost.Http2.Extensions;
 public static class Http2ContextExtensions
 {
     public static byte[] CreateHeadersFrame(
-        this Http2Context context, 
+        this Context context, 
         Func<byte[], int, int, byte[]> frameBuilder, 
         IEnumerable<HeaderField> headers,
         int bufferLength = 1024)
@@ -18,7 +18,7 @@ public static class Http2ContextExtensions
         var bufferSegment = new ArraySegment<byte>(buffer);
 
         // Encode the headers
-        var result = context.Encoder.EncodeInto(bufferSegment, headers);
+        var result = context.Http2.Encoder.EncodeInto(bufferSegment, headers);
 
         if (result.FieldCount == 0)
         {
@@ -30,7 +30,7 @@ public static class Http2ContextExtensions
     }
 
     public static void Http2SendAsync(
-        this Http2Context context,
+        this Context context,
         IEnumerable<HeaderField> headers,
         byte type, 
         byte flags, 
@@ -44,7 +44,7 @@ public static class Http2ContextExtensions
         var bufferSegment = new ArraySegment<byte>(buffer);
 
         // Encode the headers
-        var result = context.Encoder.EncodeInto(bufferSegment, headers);
+        var result = context.Http2.Encoder.EncodeInto(bufferSegment, headers);
 
         if (result.FieldCount == 0)
         {

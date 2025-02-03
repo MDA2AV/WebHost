@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System;
 using System.Buffers;
 using System.IO.Pipelines;
 using System.Security.Cryptography;
@@ -14,10 +13,32 @@ namespace WebHost;
 
 public sealed partial class WebHostApp
 {
+    private enum ConnectionType
+    {
+        Close,
+        KeepAlive,
+        Websocket
+    }
+    private static ConnectionType GetConnectionType(string headers)
+    {
+        // Check for Keep-Alive
+        if (headers.IndexOf("Connection: keep-alive", StringComparison.OrdinalIgnoreCase) >= 0)
+            return ConnectionType.KeepAlive;
+
+        // Check for Connection: close
+        if (headers.IndexOf("Connection: close", StringComparison.OrdinalIgnoreCase) >= 0)
+            return ConnectionType.Close;
+
+        // Check for WebSocket upgrade
+        return headers.IndexOf("Upgrade: websocket", StringComparison.OrdinalIgnoreCase) >= 0 
+            ? ConnectionType.Websocket 
+            : ConnectionType.Close;
+    }
     /// <summary>
     /// Handles a client connection by processing incoming requests and executing the middleware pipeline.
     /// </summary>
     /// <param name="stream"></param>
+    /// <param name="pipeReader"></param>
     /// <param name="stoppingToken">A <see cref="CancellationToken"/> to signal when the operation should stop.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     /// <remarks>
@@ -27,34 +48,32 @@ public sealed partial class WebHostApp
     /// - Handles "keep-alive" connections by continuing to process additional requests from the same client.
     /// - Closes the connection when the request does not include "keep-alive" or upon invalid input.
     /// </remarks>
-    private async Task HandleClientAsync1X(Stream stream, PipeReader pipeReader, CancellationToken stoppingToken)
+    private async Task HandleClientAsync11(Stream stream, PipeReader pipeReader, CancellationToken stoppingToken)
     {
-        var context = new Http11Context(stream);
+        var context = new Context(stream);
 
         // Read the initial client request
         //
-        //var request = await GetClientRequest(context, stoppingToken);
-
-        var rec = await ExtractHeaders(pipeReader);
-        var request = rec.Item1;
-        pipeReader.AdvanceTo(rec.Item2);
+        var headers = await ExtractHeaders(pipeReader, stoppingToken);
 
         // Loop to handle multiple requests for "keep-alive" connections
         //
-        while (request != null)
+        while (headers != null)
         {
-            if (request.Contains("Upgrade: websocket"))
-            {
-                await SendHandshakeResponse(context, request);
-            }
+            var connection = GetConnectionType(headers);
+
+            if (connection == ConnectionType.Websocket)
+                await SendHandshakeResponse(context, headers);
+
+            var headerEntries = headers.Split("\r\n");
 
             // Split the request into headers and body
             //
-            (string[], string) requestData = RequestParser.SplitHeadersAndBody(request);
+            var body = await ExtractBody(pipeReader, headers, stoppingToken);
 
             // Try to extract the uri from the headers
             //
-            var result = RequestParser.TryExtractUri(headers: requestData.Item1, out (string, string) uriHeader);
+            var result = RequestParser.TryExtractUri2(headerEntries[0], out (string, string) uriHeader);
             if (!result)
             {
                 _logger?.LogTrace("Invalid request received, unable to parse route");
@@ -65,8 +84,8 @@ public sealed partial class WebHostApp
 
             // Populate the context with the parsed request information
             //
-            context.Request = new Http11Request(Headers: requestData.Item1,
-                                          Body: requestData.Item2,
+            context.Request = new Http11Request(Headers: headerEntries,
+                                          Body: body,
                                           Route: uriParams[0],
                                           QueryParameters: uriParams.Length > 1 ? uriParams[1] : string.Empty,
                                           HttpMethod: uriHeader.Item1);
@@ -86,16 +105,13 @@ public sealed partial class WebHostApp
 
             // Handle "keep-alive" connections
             //
-            if (request.Contains("Connection: keep-alive"))
+            if (connection == ConnectionType.KeepAlive)
             {
-                //request = await GetClientRequest(context, stoppingToken); // Read the next request
-                rec = await ExtractHeaders(pipeReader);
-                request = rec.Item1;
-                pipeReader.AdvanceTo(rec.Item2);
+                headers = await ExtractHeaders(pipeReader, stoppingToken);
             }
             else
             {
-                break; // Exit the loop if the connection is not "keep-alive"
+                break;
             }
         }
     }

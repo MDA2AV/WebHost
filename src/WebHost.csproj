@@ -35,8 +35,4 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Http2\Hpack\" />
-  </ItemGroup>
-
 </Project>

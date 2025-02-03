@@ -1,39 +1,67 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
-using System.Net.Security;
-using System.Net.Sockets;
-using WebHost.Hpack;
 
 namespace WebHost.Models;
 
-public interface IHttpRequest
-{
-    IEnumerable<string> Headers { get; init; }
-    string Route { get; init; }
-    string QueryParameters { get; init; }
-    string HttpMethod { get; init; }
-}
-
 public record Http11Request(
     IEnumerable<string> Headers,
-    string Body,
+    string? Body,
     string Route,
+    string HttpMethod,
     string QueryParameters,
-    string HttpMethod) : IHttpRequest;
+    int StreamId = 0) : IHttpRequest;
 
 public record Http2Request(
     IEnumerable<string> Headers, 
     string Route, 
     string HttpMethod, 
     string QueryParameters,
-    int StreamId) : IHttpRequest;
+    int StreamId,
+    string? Body = null!) : IHttpRequest;
 
+public interface IHttpRequest
+{
+    IEnumerable<string> Headers { get; init; }
+    string? Body { get; init; }
+    string Route { get; init; }
+    string HttpMethod { get; init; }
+    string QueryParameters { get; init; }
+    int StreamId { get; init; }
+}
+
+public class Http11
+{
+    public HttpResponseMessage Response { get; set; } = null!;
+}
+
+/*
+public class Http2
+{
+    public BlockingCollection<FrameData> StreamBuffer { get; set; } = null!;
+    public Encoder Encoder { get; set; } = null!;
+    public Decoder Decoder { get; set; } = null!;
+}
+*/
+
+public class Context(Stream stream) : IContext
+{
+    public Stream Stream { get; set; } = stream;
+    public AsyncServiceScope Scope { get; set; }
+    public T Resolve<T>() where T : notnull => Scope.ServiceProvider.GetRequiredService<T>();
+
+    public HttpResponseMessage Response { get; set; } = null!;
+    public IHttpRequest Request { get; set; } = null!;
+
+    public Http11 Http11 { get; set; } = null!;
+    //public Http2 Http2 { get; set; } = null!;
+
+    public CancellationToken CancellationToken { get; set; }
+}
+
+/*
 public class Http11Context(Stream stream) : IContext
 {
-    //public Socket? Socket { get; set; }
     public Stream Stream { get; set; } = stream;
-
-    //public SslStream? SslStream { get; set; }
     public AsyncServiceScope Scope { get; set; }
     public T Resolve<T>() where T : notnull => Scope.ServiceProvider.GetRequiredService<T>();
     public IHttpRequest Request { get; set; } = null!;
@@ -43,9 +71,7 @@ public class Http11Context(Stream stream) : IContext
 
 public class Http2Context(Stream stream) : IContext
 {
-    //public Socket? Socket { get; set; }
     public Stream Stream { get; set; } = stream;
-    //public SslStream? SslStream { get; set; } = sslStream;
     public AsyncServiceScope Scope { get; set; }
     public T Resolve<T>() where T : notnull => Scope.ServiceProvider.GetRequiredService<T>();
     public IHttpRequest Request { get; set; } = null!;
@@ -53,4 +79,4 @@ public class Http2Context(Stream stream) : IContext
     public Encoder Encoder { get; set; } = null!;
     public Decoder Decoder { get; set; } = null!;
     public CancellationToken CancellationToken { get; set; }
-}
+}*/

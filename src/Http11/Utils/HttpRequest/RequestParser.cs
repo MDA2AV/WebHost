@@ -49,6 +49,36 @@ public static class RequestParser
         return false;
     }
 
+    public static bool TryExtractUri2(string? header, out (string, string) route)
+    {
+        if (header is null)
+        {
+            System.Diagnostics.Debug.WriteLine("Headers is null");
+            route = (null!, null!);
+            return false;
+        }
+
+        const string pattern = @"^\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(/[^\s]*)\s+HTTP/\d\.\d\s*$";
+
+        route = default;
+
+        var match = Regex.Match(header, pattern);
+        var result = match.Success;
+
+        if (result)
+        {
+            var method = match.Groups[1].Value; // Extract HTTP method
+            var path = match.Groups[2].Value;   // Extract URI including query parameters
+
+            route = (method, path);
+
+            return true;
+        }
+
+        Console.WriteLine($"Endpoint was not found.");
+        return false;
+    }
+
     /// <summary>
     /// Splits the raw HTTP request into headers and body.
     /// </summary>

@@ -10,8 +10,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.IO.Pipelines;
-using System.IO;
-using System.Xml.Linq;
 
 namespace WebHost;
 
@@ -33,7 +31,11 @@ public sealed partial class WebHostApp
     {
         StreamPipeReaderOptions readerOptions = new(MemoryPool<byte>.Shared, leaveOpen: true, bufferSize: 65535);
         var stream = new NetworkStream(client);
-        await HandleClientAsync1X(stream, PipeReader.Create(stream, readerOptions), stoppingToken);
+
+        if(_useStandardHttp11Version)
+            await HandleClientAsync11(stream, PipeReader.Create(stream, readerOptions), stoppingToken);
+        else
+            await HandleClientAsync0(stream, PipeReader.Create(stream, readerOptions), stoppingToken);
     }
 
     /// <summary>
@@ -74,11 +76,9 @@ public sealed partial class WebHostApp
             //
             var protocols = new List<SslApplicationProtocol>
             {
-                SslApplicationProtocol.Http2,
+                //SslApplicationProtocol.Http2,
                 SslApplicationProtocol.Http11,
             };
-
-            //SslClientAuthenticationOptions a = new SslClientAuthenticationOptions();
 
             var sslOptions = new SslServerAuthenticationOptions
             {
@@ -93,13 +93,12 @@ public sealed partial class WebHostApp
             await sslStream.AuthenticateAsServerAsync(sslOptions, stoppingToken);
             /*
             await sslStream.AuthenticateAsServerAsync(SecurityOptions.ServerCertificate,
-                                                        clientCertificateRequired: true,
-                                                        enabledSslProtocols: SslProtocols.Tls12,
-                                                        checkCertificateRevocation: false);
+                                                      clientCertificateRequired: true,
+                                                      enabledSslProtocols: SslProtocols.Tls12,
+                                                      checkCertificateRevocation: false);
             */
 
             protocol = sslStream.NegotiatedApplicationProtocol.ToString();
-            //Console.WriteLine($"Negotiated protocol: {protocol}");
         }
         catch (Exception ex) when (HandleTlsException(ex))
         {
@@ -112,8 +111,8 @@ public sealed partial class WebHostApp
         //
         var handler = protocol switch
         {
-            "h2" => HandleClientAsync2x(sslStream, stoppingToken),
-            _ => HandleClientAsync1X(
+            //"h2" => HandleClientAsync2x(sslStream, stoppingToken),
+            _ => HandleClientAsync11(
                 sslStream, 
                 PipeReader.Create(sslStream, 
                                   new StreamPipeReaderOptions(MemoryPool<byte>.Shared, leaveOpen: true, bufferSize: 65535)), 
