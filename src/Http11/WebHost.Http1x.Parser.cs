@@ -76,6 +76,7 @@ public sealed partial class WebHostApp
         // Check if one shot read
         if (buffer.Length == contentLength)
         {
+            buffer.Slice(0, contentLength).CopyTo(bodyBuffer);
             reader.AdvanceTo(buffer.GetPosition(contentLength));
             return Encoding.UTF8.GetString(bodyBuffer);
         }
