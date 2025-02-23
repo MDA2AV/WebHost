@@ -32,10 +32,7 @@ public sealed partial class WebHostApp
         StreamPipeReaderOptions readerOptions = new(MemoryPool<byte>.Shared, leaveOpen: true, bufferSize: 65535);
         var stream = new NetworkStream(client);
 
-        if(_useStandardHttp11Version)
-            await HandleClientAsync11(stream, PipeReader.Create(stream, readerOptions), stoppingToken);
-        else
-            await HandleClientAsync0(stream, PipeReader.Create(stream, readerOptions), stoppingToken);
+        await HandleClientAsync11(stream, PipeReader.Create(stream, readerOptions), stoppingToken);
     }
 
     /// <summary>

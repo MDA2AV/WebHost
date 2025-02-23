@@ -9,8 +9,8 @@ namespace WebHost;
 public interface IContext
 {
     Stream Stream { get; set; }
-    Http11 Http11 { get; set; }
     IHttpRequest Request { get; set; }
+    HttpResponseMessage Response { get; set; }
 
     /// <summary>
     /// Gets or sets the service scope for resolving scoped services during the lifecycle of the request.
