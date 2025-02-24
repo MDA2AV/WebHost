@@ -33,7 +33,7 @@ Microsoft.Extensions.Hosting (>= 9.0.0)
 
 ### Resource Hosting (Static pages)
 
-- Planned to be added
+- Yes
  
 ### Websockets
 
