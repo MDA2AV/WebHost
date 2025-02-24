@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using WebHost.Models;
 using System.Net;
+using System.Reflection;
 
 namespace WebHost;
 
@@ -13,6 +14,10 @@ public sealed partial class WebHostApp
     private int _port = 9001;
     private int _backlog = 10;
     private bool _useStandardHttp11Version = true;
+
+    private bool _useStaticFiles;
+    private string _resourcesPath = string.Empty;
+    private Assembly _resourcesAssembly = null!;
 
     private ILoggerFactory? _loggerFactory;
     private ILogger? _logger;
@@ -94,9 +99,23 @@ public sealed partial class WebHostApp
             return this;
         }
 
+        /// <summary>
+        /// Set webserver to use HTTP/0 custom version.
+        /// </summary>
         public WebHostBuilder UseHttp11Multiplexed()
         {
             App._useStandardHttp11Version = false;
+            return this;
+        }
+
+        /// <summary>
+        /// Webserver will return files at a given resource path in the caller project.
+        /// </summary>
+        public WebHostBuilder AddStaticFiles(Assembly resourcesAssembly, string resourcesPath)
+        {
+            App._useStaticFiles = true;
+            App._resourcesPath = resourcesPath;
+            App._resourcesAssembly = resourcesAssembly;
             return this;
         }
     }

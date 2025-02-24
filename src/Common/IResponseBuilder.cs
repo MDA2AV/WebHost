@@ -1,6 +1,4 @@
-﻿using WebHost;
-
-namespace WebHost;
+﻿namespace WebHost;
 
 /// <summary>
 /// Defines a contract for building and handling responses in the application.
