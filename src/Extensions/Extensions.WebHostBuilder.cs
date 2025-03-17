@@ -25,7 +25,7 @@ public static partial class Extensions
     public static WebHostApp.WebHostBuilder MapGet(this WebHostApp.WebHostBuilder builder, string route,
         Func<IServiceProvider, Func<IContext, Task>> func)
     {
-        builder.App.EncodedRoutes.Add(route);
+        builder.App.EncodedRoutes["GET"].Add(route);
 
         builder.App.HostBuilder.ConfigureServices((_, services) =>
             services.AddKeyedScoped<Func<IContext, Task>>($"GET_{route}", (sp, key) => func(sp)));
@@ -35,7 +35,7 @@ public static partial class Extensions
     public static WebHostApp.WebHostBuilder MapPost(this WebHostApp.WebHostBuilder builder, string route,
         Func<IServiceProvider, Func<IContext, Task>> func)
     {
-        builder.App.EncodedRoutes.Add(route);
+        builder.App.EncodedRoutes["POST"].Add(route);
 
         builder.App.HostBuilder.ConfigureServices((_, services) =>
             services.AddKeyedScoped<Func<IContext, Task>>($"POST_{route}", (sp, key) => func(sp)));
@@ -45,7 +45,7 @@ public static partial class Extensions
     public static WebHostApp.WebHostBuilder MapPut(this WebHostApp.WebHostBuilder builder, string route,
         Func<IServiceProvider, Func<IContext, Task>> func)
     {
-        builder.App.EncodedRoutes.Add(route);
+        builder.App.EncodedRoutes["PUT"].Add(route);
 
         builder.App.HostBuilder.ConfigureServices((_, services) =>
             services.AddKeyedScoped<Func<IContext, Task>>($"PUT_{route}", (sp, key) => func(sp)));
@@ -55,7 +55,7 @@ public static partial class Extensions
     public static WebHostApp.WebHostBuilder MapDelete(this WebHostApp.WebHostBuilder builder, string route,
         Func<IServiceProvider, Func<IContext, Task>> func)
     {
-        builder.App.EncodedRoutes.Add(route);
+        builder.App.EncodedRoutes["DELETE"].Add(route);
 
         builder.App.HostBuilder.ConfigureServices((_, services) =>
             services.AddKeyedScoped<Func<IContext, Task>>($"DELETE_{route}", (sp, key) => func(sp)));
@@ -65,7 +65,7 @@ public static partial class Extensions
     public static WebHostApp.WebHostBuilder MapPatch(this WebHostApp.WebHostBuilder builder, string route,
         Func<IServiceProvider, Func<IContext, Task>> func)
     {
-        builder.App.EncodedRoutes.Add(route);
+        builder.App.EncodedRoutes["PATCH"].Add(route);
 
         builder.App.HostBuilder.ConfigureServices((_, services) =>
             services.AddKeyedScoped<Func<IContext, Task>>($"PATCH_{route}", (sp, key) => func(sp)));
@@ -75,7 +75,7 @@ public static partial class Extensions
     public static WebHostApp.WebHostBuilder MapHead(this WebHostApp.WebHostBuilder builder, string route,
         Func<IServiceProvider, Func<IContext, Task>> func)
     {
-        builder.App.EncodedRoutes.Add(route);
+        builder.App.EncodedRoutes["HEAD"].Add(route);
 
         builder.App.HostBuilder.ConfigureServices((_, services) =>
             services.AddKeyedScoped<Func<IContext, Task>>($"HEAD_{route}", (sp, key) => func(sp)));
@@ -85,7 +85,7 @@ public static partial class Extensions
     public static WebHostApp.WebHostBuilder MapOptions(this WebHostApp.WebHostBuilder builder, string route,
         Func<IServiceProvider, Func<IContext, Task>> func)
     {
-        builder.App.EncodedRoutes.Add(route);
+        builder.App.EncodedRoutes["OPTIONS"].Add(route);
 
         builder.App.HostBuilder.ConfigureServices((_, services) =>
             services.AddKeyedScoped<Func<IContext, Task>>($"OPTIONS_{route}", (sp, key) => func(sp)));

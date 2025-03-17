@@ -154,10 +154,7 @@ public sealed partial class WebHostApp
             return middleware[index](context, async (ctx) => await Pipeline(ctx, index + 1, middleware));
         }
 
-        var decodedRoute = MatchEndpoint(EncodedRoutes, context.Request.Route);
-
-        System.Diagnostics.Debug.WriteLine($"Decoded route: {decodedRoute}");
-        System.Diagnostics.Debug.WriteLine($"{context.Request.HttpMethod}_{decodedRoute}");
+        var decodedRoute = MatchEndpoint(EncodedRoutes[context.Request.HttpMethod.ToUpper()], context.Request.Route);
 
         var endpoint = context.Scope.ServiceProvider
             .GetRequiredKeyedService<Func<IContext, Task>>($"{context.Request.HttpMethod}_{decodedRoute}");

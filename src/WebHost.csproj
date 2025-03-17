@@ -9,9 +9,9 @@
     <Authors>Toni Caçadeira</Authors>
     <RepositoryUrl>https://github.com/MDA2AV/WebHost</RepositoryUrl>
 	  <RepositoryType>git</RepositoryType>
-    <AssemblyVersion>9.1.3</AssemblyVersion>
-    <FileVersion>9.1.3</FileVersion>
-    <Version>9.1.3</Version>
+    <AssemblyVersion>9.1.4</AssemblyVersion>
+    <FileVersion>9.1.4</FileVersion>
+    <Version>9.1.4</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>socket;webserver;lightweight</PackageTags>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
