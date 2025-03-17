@@ -129,7 +129,7 @@ public sealed partial class WebHostApp
     /// <exception cref="InvalidOperationException">
     /// Thrown when the stream ends unexpectedly before reading the complete body.
     /// </exception>
-    public static async Task<string?> ExtractBody(PipeReader reader, string headers, CancellationToken stoppingToken)
+    public static async Task<byte[]?> ExtractBody(PipeReader reader, string headers, CancellationToken stoppingToken)
     {
         // Try to get the Content-Length from headers
         if (!TryGetContentLength(headers, out var contentLength))
@@ -154,7 +154,8 @@ public sealed partial class WebHostApp
             // Advance the reader past the body
             reader.AdvanceTo(buffer.GetPosition(contentLength));
 
-            return Encoding.UTF8.GetString(bodyBuffer);
+            return bodyBuffer;
+            //return Encoding.UTF8.GetString(bodyBuffer);
         }
 
         // Handle fragmented body (less common case)
@@ -182,7 +183,8 @@ public sealed partial class WebHostApp
         }
 
         // Decode and return the complete body
-        return Encoding.UTF8.GetString(bodyBuffer);
+        //return Encoding.UTF8.GetString(bodyBuffer);
+        return bodyBuffer;
     }
 
     /// <summary>

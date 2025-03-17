@@ -3,7 +3,7 @@ namespace WebHost.Models;
 
 public record Http11Request(
     IEnumerable<string> Headers,
-    string? Body,
+    byte[]? Body,
     string Route,
     string HttpMethod,
     string QueryParameters) : IHttpRequest;
@@ -11,7 +11,7 @@ public record Http11Request(
 public interface IHttpRequest
 {
     IEnumerable<string> Headers { get; init; }
-    string? Body { get; init; }
+    byte[]? Body { get; init; }
     string Route { get; init; }
     string HttpMethod { get; init; }
     string QueryParameters { get; init; }

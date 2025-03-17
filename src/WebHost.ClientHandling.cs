@@ -156,6 +156,9 @@ public sealed partial class WebHostApp
 
         var decodedRoute = MatchEndpoint(EncodedRoutes, context.Request.Route);
 
+        System.Diagnostics.Debug.WriteLine($"Decoded route: {decodedRoute}");
+        System.Diagnostics.Debug.WriteLine($"{context.Request.HttpMethod}_{decodedRoute}");
+
         var endpoint = context.Scope.ServiceProvider
             .GetRequiredKeyedService<Func<IContext, Task>>($"{context.Request.HttpMethod}_{decodedRoute}");
 
