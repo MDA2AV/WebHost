@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.IO.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
 namespace WebHost.Models;
 
 public record Http11Request(
@@ -20,6 +21,7 @@ public interface IHttpRequest
 public class Context(Stream stream) : IContext
 {
     public Stream Stream { get; set; } = stream;
+    public PipeReader PipeReader { get; set; } = null!;
     public AsyncServiceScope Scope { get; set; }
     public T Resolve<T>() where T : notnull => Scope.ServiceProvider.GetRequiredService<T>();
     public HttpResponseMessage Response { get; set; } = null!;

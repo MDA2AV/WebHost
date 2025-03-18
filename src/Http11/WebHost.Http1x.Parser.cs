@@ -57,6 +57,61 @@ public sealed partial class WebHostApp
     }
 
     /// <summary>
+    /// Reads and extracts a chunk of data from a <see cref="PipeReader"/> stream,
+    /// following the chunked transfer encoding format.
+    /// </summary>
+    /// <param name="reader">The <see cref="PipeReader"/> to read data from.</param>
+    /// <param name="stoppingToken">A <see cref="CancellationToken"/> to monitor for cancellation requests.</param>
+    /// <returns>
+    /// A <see cref="byte"/> array containing the extracted chunk,
+    /// an empty array (<c>[]</c>) if the final chunk ("0\r\n\r\n") is reached,
+    /// or <c>null</c> if the stream ends before a valid chunk is found.
+    /// </returns>
+    /// <remarks>
+    /// - This method continuously reads from the <paramref name="reader"/> until it finds a valid chunk.
+    /// - It supports chunked transfer encoding, where each chunk is separated by a <c>"\r\n"</c> sequence.
+    /// - The method detects the end of a chunked message when it encounters the last chunk indicator <c>"0\r\n\r\n"</c>.
+    /// - If no complete chunk is found before the end of the stream, <c>null</c> is returned.
+    /// </remarks>
+    public static async Task<byte[]?> ExtractChunk(PipeReader reader, CancellationToken stoppingToken)
+    {
+        while (true)
+        {
+            // Read from the pipe
+            var result = await reader.ReadAsync(stoppingToken);
+            var buffer = result.Buffer;
+
+            // Check for last chunk (end of chunked transfer encoding)
+            if (TryAdvanceTo(new SequenceReader<byte>(buffer), "0\r\n\r\n"u8, out var lastChunkPosition))
+            {
+                reader.AdvanceTo(lastChunkPosition); // Consume the final chunk indicator
+                return []; // Signal last chunk read
+            }
+
+            // Try to find the header terminator sequence (\r\n) - read a chunk
+            if (TryAdvanceTo(new SequenceReader<byte>(buffer), "\r\n"u8, out var position))
+            {
+                var chunk = buffer.Slice(0, position).ToArray();
+
+                // Advance the reader past the headers
+                reader.AdvanceTo(position);
+
+                return chunk;
+            }
+
+            // If delimiter not found in current buffer, mark everything as examined
+            // but not consumed, so we can continue the search with more data
+            reader.AdvanceTo(buffer.Start, buffer.End);
+
+            // If we've reached the end of the stream without finding headers
+            if (result.IsCompleted)
+            {
+                return null; // End of stream, no complete headers found
+            }
+        }
+    }
+
+    /// <summary>
     /// Searches for a specific byte sequence in a ReadOnlySequence and advances to that position.
     /// </summary>
     /// <param name="reader">The sequence reader to search within.</param>

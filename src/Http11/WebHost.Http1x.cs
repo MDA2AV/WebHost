@@ -98,7 +98,10 @@ public sealed partial class WebHostApp
     private async Task HandleClientAsync11(Stream stream, PipeReader pipeReader, CancellationToken stoppingToken)
     {
         // Create a new context for this client connection
-        var context = new Context(stream);
+        var context = new Context(stream)
+        {
+            PipeReader = pipeReader
+        };
 
         // Read the initial client request headers
         var headers = await ExtractHeaders(pipeReader, stoppingToken);
