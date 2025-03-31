@@ -188,9 +188,11 @@ public sealed partial class WebHostApp
     {
         // Try to get the Content-Length from headers
         if (!TryGetContentLength(headers, out var contentLength))
-        {
             return null; // No Content-Length header or invalid value
-        }
+
+        // Request hasn't body
+        if (contentLength == 0)
+            return [];
 
         // Allocate a buffer to store the body
         var bodyBuffer = new byte[contentLength];
