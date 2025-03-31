@@ -154,7 +154,7 @@ public static partial class Extensions
                 services.AddKeyedScoped(handler.InterfaceType, keyValue, (sp, _) =>
                     ActivatorUtilities.CreateInstance(sp, handler.HandlerType));
 
-                Console.WriteLine($"Builder: [Registered {handler.HandlerType} as {handler.InterfaceType} with key '{keyValue}']");
+                //Console.WriteLine($"Builder: [Registered {handler.HandlerType} as {handler.InterfaceType} with key '{keyValue}']");
             }
         });
 
