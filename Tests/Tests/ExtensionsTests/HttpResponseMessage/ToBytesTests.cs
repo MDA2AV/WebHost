@@ -1,5 +1,5 @@
 ﻿using System.Text;
-using WebHost.Extensions;
+using WebHost.Http11.Extensions;
 
 namespace Tests.ExtensionsTests.HttpResponseMessage;
 

@@ -1,6 +1,5 @@
 ﻿using System.IO.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
-using WebHost.Models;
 
 namespace WebHost;
 

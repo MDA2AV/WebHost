@@ -1,0 +1,31 @@
+﻿using System.IO.Pipelines;
+
+namespace WebHost;
+
+/// <summary>
+/// Defines a contract for handling client connections using a custom or HTTP-based protocol.
+/// </summary>
+public interface IHttpHandler
+{
+    /// <summary>
+    /// Processes a client connection and dispatches one or more protocol-compliant requests.
+    /// </summary>
+    /// <param name="stream">The <see cref="Stream"/> representing the client connection.</param>
+    /// <param name="pipeReader">
+    /// A <see cref="PipeReader"/> instance used to efficiently read and parse data from the stream.
+    /// </param>
+    /// <param name="pipeline">
+    /// A delegate that executes the application's request-handling pipeline, typically consisting of middleware and endpoint logic.
+    /// </param>
+    /// <param name="stoppingToken">
+    /// A <see cref="CancellationToken"/> used to signal cancellation, such as during server shutdown.
+    /// </param>
+    /// <returns>
+    /// A <see cref="Task"/> that represents the asynchronous operation of handling the client session.
+    /// </returns>
+    Task HandleClientAsync(
+        Stream stream,
+        PipeReader pipeReader,
+        Func<WebHost.IContext, Task> pipeline,
+        CancellationToken stoppingToken);
+}

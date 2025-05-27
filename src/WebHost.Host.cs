@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Hosting;
-using WebHost.Models;
 
 namespace WebHost;
 
@@ -77,14 +76,4 @@ public sealed partial class WebHostApp
     {
         InternalHost.Run();
     }
-
-    /// <summary>
-    /// Gets or sets the <see cref="SecurityOptions"/> used to configure security settings for the application.
-    /// </summary>
-    /// <remarks>
-    /// - This property provides options for configuring TLS/SSL settings, such as certificates and client validation.
-    /// - Initialized with a default instance of <see cref="SecurityOptions"/> to ensure the application has default security configurations.
-    /// - Can be customized to enable or disable TLS, set server and client certificates, and define validation logic.
-    /// </remarks>
-    public SecurityOptions SecurityOptions { get; set; } = new SecurityOptions();
 }

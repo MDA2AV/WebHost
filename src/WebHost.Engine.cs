@@ -13,7 +13,7 @@ public sealed partial class WebHostApp
     /// </summary>
     /// <remarks>
     /// - Configures a default host builder using <see cref="Host.CreateDefaultBuilder"/>.
-    /// - Registers a hosted service based on the current TLS settings in <see cref="SecurityOptions"/>.
+    /// - Registers a hosted service based on the current TLS settings in <see cref="SslServerAuthenticationOptions"/>.
     /// - If TLS is enabled, a TLS-enabled engine is created; otherwise, a plain engine is used.
     /// </remarks>
     private WebHostApp()
@@ -21,7 +21,7 @@ public sealed partial class WebHostApp
         HostBuilder = Host.CreateDefaultBuilder()
             .ConfigureServices((hostContext, services) =>
             {
-                services.AddHostedService(sp => SecurityOptions.TlsEnabled
+                services.AddHostedService(_ => _tlsEnabled
                     ? CreateTlsEnabledEngine()
                     : CreatePlainEngine());
             });

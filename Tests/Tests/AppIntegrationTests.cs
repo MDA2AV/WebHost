@@ -6,8 +6,9 @@ using System.Net;
 using System.Reflection;
 using System.Text;
 using WebHost;
-using WebHost.Exceptions;
 using WebHost.Extensions;
+using WebHost.Http11.Context;
+using WebHost.Http11.Extensions;
 using Xunit.Abstractions;
 
 namespace Tests;
@@ -93,7 +94,8 @@ public class CreateWebHostServer(ITestOutputHelper testOutputHelper)
                     await next(context);
                 }
                 // In case a ServiceException type was caught, the status code is known to be used on the http response
-                // 
+                //
+                /*
                 catch (ServiceException serviceEx)
                 {
                     logger.LogError("ServiceException was caught and being handled:{Message}", serviceEx.Message);
@@ -109,6 +111,7 @@ public class CreateWebHostServer(ITestOutputHelper testOutputHelper)
 
                     await context.SendAsync(await context.Response.ToBytes());
                 }
+                */
                 // In case a regular exception is caught, assume the http response status code to be 500
                 //
                 catch (Exception ex)

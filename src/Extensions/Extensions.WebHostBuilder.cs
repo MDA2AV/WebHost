@@ -7,7 +7,7 @@ namespace WebHost.Extensions;
 /// <summary>
 /// Provides extension methods for configuring and enhancing the functionality of <see cref="WebHostApp.WebHostBuilder"/>.
 /// </summary>
-public static partial class Extensions
+public static class Extensions
 {
     /// <summary>
     /// Maps a route to a request-handling delegate within the application.

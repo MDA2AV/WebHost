@@ -1,5 +1,4 @@
-﻿using WebHost.Exceptions;
-using WebHost.Utils.HttpRequest;
+﻿using WebHost.Http11;
 
 namespace Tests.UtilsTests.HeaderParserTests;
 
@@ -12,7 +11,7 @@ public class HttpRequestParserTests
         var rawRequest = "GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\nHello";
 
         // Act
-        var result = RequestParser.SplitHeadersAndBody(rawRequest);
+        var result = WebHostHttp11.SplitHeadersAndBody(rawRequest);
 
         // Assert
         Assert.Equal(3, result.Headers.Length); // 3 headers including Content-Length
@@ -24,7 +23,7 @@ public class HttpRequestParserTests
     public void SplitHeadersAndBody_NullRequest_ThrowsArgumentNullException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullServiceException>(() => RequestParser.SplitHeadersAndBody(null));
+        Assert.Throws<ArgumentNullException>(() => WebHostHttp11.SplitHeadersAndBody(null));
     }
 
     [Fact]
@@ -34,7 +33,7 @@ public class HttpRequestParserTests
         var rawRequest = "GET / HTTP/1.1\r\nHost: localhost";
 
         // Act & Assert
-        var exception = Assert.Throws<InvalidOperationException>(() => RequestParser.SplitHeadersAndBody(rawRequest));
+        var exception = Assert.Throws<InvalidOperationException>(() => WebHostHttp11.SplitHeadersAndBody(rawRequest));
         Assert.Equal("Malformed HTTP request: No header-body separator found.", exception.Message);
     }
 
@@ -45,7 +44,7 @@ public class HttpRequestParserTests
         var rawRequest = "GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: Invalid\r\n\r\nHello";
 
         // Act & Assert
-        var exception = Assert.Throws<InvalidOperationException>(() => RequestParser.SplitHeadersAndBody(rawRequest));
+        var exception = Assert.Throws<InvalidOperationException>(() => WebHostHttp11.SplitHeadersAndBody(rawRequest));
         Assert.Equal("Invalid Content-Length header.", exception.Message);
     }
 
@@ -56,7 +55,7 @@ public class HttpRequestParserTests
         var rawRequest = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\nHello";
 
         // Act
-        var result = RequestParser.SplitHeadersAndBody(rawRequest);
+        var result = WebHostHttp11.SplitHeadersAndBody(rawRequest);
 
         // Assert
         Assert.Equal(2, result.Headers.Length); // 2 headers excluding Content-Length
@@ -70,7 +69,7 @@ public class HttpRequestParserTests
         var rawRequest = "GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 10\r\n\r\nShort";
 
         // Act
-        var result = RequestParser.SplitHeadersAndBody(rawRequest);
+        var result = WebHostHttp11.SplitHeadersAndBody(rawRequest);
 
         // Assert
         Assert.Equal(3, result.Headers.Length);
@@ -85,7 +84,7 @@ public class HttpRequestParserTests
         var rawRequest = "\r\n\r\n";
 
         // Act
-        var result = RequestParser.SplitHeadersAndBody(rawRequest);
+        var result = WebHostHttp11.SplitHeadersAndBody(rawRequest);
 
         // Assert
         Assert.Equal([""], result.Headers);
@@ -99,7 +98,7 @@ public class HttpRequestParserTests
         var rawRequest = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
 
         // Act
-        var result = RequestParser.SplitHeadersAndBody(rawRequest);
+        var result = WebHostHttp11.SplitHeadersAndBody(rawRequest);
 
         // Assert
         Assert.Equal(2, result.Headers.Length);
@@ -114,7 +113,7 @@ public class HttpRequestParserTests
         var rawRequest = $"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: {largeBody.Length}\r\n\r\n{largeBody}";
 
         // Act
-        var result = RequestParser.SplitHeadersAndBody(rawRequest);
+        var result = WebHostHttp11.SplitHeadersAndBody(rawRequest);
 
         // Assert
         Assert.Equal(3, result.Headers.Length);

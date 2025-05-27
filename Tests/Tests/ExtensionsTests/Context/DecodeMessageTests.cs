@@ -1,7 +1,5 @@
 ﻿using System.Text;
-using WebHost;
-using WebHost.Extensions;
-using WebHost.Utils.Websocket;
+using WebHost.Http11.Websockets;
 
 namespace Tests.ExtensionsTests.Context;
 

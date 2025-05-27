@@ -1,15 +1,13 @@
 ﻿using System.Buffers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using WebHost.Exceptions;
-using WebHost.Models;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.IO.Pipelines;
+using System.Security;
 
 namespace WebHost;
 
@@ -24,7 +22,6 @@ public sealed partial class WebHostApp
     /// </param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     /// <remarks>
-    /// Creates a new <see cref="Context"/> for the client and processes the connection using <see cref="HandleClientAsyncXX"/>.
     /// This method is used for plain, unencrypted client communication.
     /// </remarks>
     private async Task HandlePlainClientAsync(Socket client, CancellationToken stoppingToken)
@@ -32,7 +29,7 @@ public sealed partial class WebHostApp
         StreamPipeReaderOptions readerOptions = new(MemoryPool<byte>.Shared, leaveOpen: true, bufferSize: 65535);
         var stream = new NetworkStream(client);
 
-        await HandleClientAsync11(stream, PipeReader.Create(stream, readerOptions), stoppingToken);
+        await _httpHandler.HandleClientAsync(stream, PipeReader.Create(stream, readerOptions), Pipeline, stoppingToken);
     }
 
     /// <summary>
@@ -46,56 +43,31 @@ public sealed partial class WebHostApp
     /// <remarks>
     /// - Performs the TLS handshake to secure the connection.
     /// - Validates the server certificate and optionally validates the client certificate.
-    /// - If the TLS handshake succeeds, the connection is processed using <see cref="HandleClientAsyncXX"/>.
+    /// - If the TLS handshake succeeds, the connection is processed/>.
     /// - If the TLS handshake fails, an error message is sent to the client before the connection is closed.
     /// </remarks>
-    /// <exception cref="ServiceUnavailableServiceException">
+    /// <exception cref="SecurityException">
     /// Thrown if the server certificate is null, as TLS cannot be established without it.
     /// </exception>
     private async Task HandleTlsClientAsync(Socket client, CancellationToken stoppingToken)
     {
-        if (SecurityOptions.ServerCertificate is null)
+        if (SslServerAuthenticationOptions.ServerCertificate is null)
         {
-            throw new ServiceUnavailableServiceException("SecurityOptions.ServerCertificate is null");
+            throw new SecurityException("SecurityOptions.ServerCertificate is null");
         }
 
         // Create and configure the SSL stream for the client connection
         //
+        // TODO: Investigate leaveInnerStreamOpen flag
         await using var sslStream = new SslStream(new NetworkStream(client),
                                                   false,
-                                                  SecurityOptions.ClientCertificateValidation);
-
-        var protocol = string.Empty;
+                                                  SslServerAuthenticationOptions.RemoteCertificateValidationCallback);
 
         try
         {
             // Perform the TLS handshake
             //
-            var protocols = new List<SslApplicationProtocol>
-            {
-                //SslApplicationProtocol.Http2,
-                SslApplicationProtocol.Http11,
-            };
-
-            var sslOptions = new SslServerAuthenticationOptions
-            {
-                ApplicationProtocols = protocols,
-                ServerCertificate = SecurityOptions.ServerCertificate,
-                EnabledSslProtocols = SslProtocols.Tls12,
-                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-                ClientCertificateRequired = true,
-                RemoteCertificateValidationCallback = SecurityOptions.ClientCertificateValidation
-            };
-
-            await sslStream.AuthenticateAsServerAsync(sslOptions, stoppingToken);
-            /*
-            await sslStream.AuthenticateAsServerAsync(SecurityOptions.ServerCertificate,
-                                                      clientCertificateRequired: true,
-                                                      enabledSslProtocols: SslProtocols.Tls12,
-                                                      checkCertificateRevocation: false);
-            */
-
-            protocol = sslStream.NegotiatedApplicationProtocol.ToString();
+            await sslStream.AuthenticateAsServerAsync(SslServerAuthenticationOptions, stoppingToken);
         }
         catch (Exception ex) when (HandleTlsException(ex))
         {
@@ -106,17 +78,11 @@ public sealed partial class WebHostApp
 
         // Handle the client connection securely
         //
-        var handler = protocol switch
-        {
-            //"h2" => HandleClientAsync2x(sslStream, stoppingToken),
-            _ => HandleClientAsync11(
-                sslStream, 
-                PipeReader.Create(sslStream, 
-                                  new StreamPipeReaderOptions(MemoryPool<byte>.Shared, leaveOpen: true, bufferSize: 65535)), 
-                                  stoppingToken)
-        };
-
-        await handler;
+        await _httpHandler.HandleClientAsync(
+            sslStream, 
+            PipeReader.Create(sslStream, new StreamPipeReaderOptions(MemoryPool<byte>.Shared, leaveOpen: true, bufferSize: 65535)),
+            Pipeline,
+            stoppingToken);
     }
 
     /// <summary>
@@ -146,7 +112,7 @@ public sealed partial class WebHostApp
     /// Pipeline recursively executes registered middleware by order or registration. Last middleware element wraps the endpoint. 
     /// All elements are resolved within the context.Scope.IServiceProvider.
     /// </summary>
-    /// <exception cref="InvalidOperationServiceException"></exception>
+    /// <exception cref="InvalidOperationException"></exception>
     public Task Pipeline(IContext context, int index, IList<Func<IContext, Func<IContext, Task>, Task>> middleware)
     {
         if (index < middleware.Count)
@@ -160,9 +126,33 @@ public sealed partial class WebHostApp
             .GetRequiredKeyedService<Func<IContext, Task>>($"{context.Request.HttpMethod}_{decodedRoute}");
 
         return endpoint is null
-            ? throw new InvalidOperationServiceException("Unable to find the Invoke method on the resolved service.")
+            ? throw new InvalidOperationException("Unable to find the Invoke method on the resolved service.")
             : endpoint.Invoke(context);
 
+    }
+
+    /// <summary>
+    /// Executes the registered middleware pipeline for the given HTTP context.
+    /// </summary>
+    /// <param name="context">The <see cref="IContext"/> representing the current HTTP request and its associated state.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation of processing the middleware pipeline.</returns>
+    /// <remarks>
+    /// This method:
+    /// <list type="bullet">
+    /// <item><description>Resolves all registered middleware components from the DI container.</description></item>
+    /// <item><description>Creates a new service scope for the lifetime of the request and assigns it to the context.</description></item>
+    /// <item><description>Recursively invokes the middleware pipeline starting from index 0.</description></item>
+    /// </list>
+    /// Called by the <see cref="IHttpHandler.HandleClientAsync"/> implementation to process each incoming request.
+    /// </remarks>
+    public async Task Pipeline(IContext context)
+    {
+        var middleware = InternalHost.Services.GetServices<Func<IContext, Func<IContext, Task>, Task>>().ToList();
+
+        await using var scope = InternalHost.Services.CreateAsyncScope();
+        context.Scope = scope;
+
+        await Pipeline(context, 0, middleware);
     }
 
     /// <summary>

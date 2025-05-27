@@ -1,26 +1,38 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using WebHost.Models;
 using System.Net;
+using System.Net.Security;
 using System.Reflection;
+using System.Security.Authentication;
+using WebHost.Http11;
 
 namespace WebHost;
 
 public sealed partial class WebHostApp
 {
-    // Configuration fields
-    //
+    #region Properties
+
+    public SslServerAuthenticationOptions SslServerAuthenticationOptions { get; set; } =
+        new SslServerAuthenticationOptions
+        {
+            EnabledSslProtocols = SslProtocols.None
+        };
+
+    #endregion
+
+    #region Fields
+
     private IPAddress _ipAddress = IPAddress.Parse("127.0.0.1");
     private int _port = 9001;
     private int _backlog = 10;
-    private bool _useStandardHttp11Version = true;
-
-    private bool _useStaticFiles;
-    private string _resourcesPath = string.Empty;
-    private Assembly _resourcesAssembly = null!;
+    private bool _tlsEnabled;
 
     private ILoggerFactory? _loggerFactory;
     private ILogger? _logger;
+
+    private IHttpHandler _httpHandler = null!;
+
+    #endregion
 
     /// <summary>
     /// Provides a builder for configuring and creating an instance of <see cref="WebHostApp"/>.
@@ -37,7 +49,8 @@ public sealed partial class WebHostApp
         public WebHostApp App { get; } = new WebHostApp();
 
         /// <summary>
-        /// Builds the WebHostApp instance with the current configuration.
+        /// Builds and returns the fully configured <see cref="WebHostApp"/> instance.
+        /// Initializes internal services, logger factory, and logger.
         /// </summary>
         public WebHostApp Build()
         {
@@ -50,20 +63,24 @@ public sealed partial class WebHostApp
         }
 
         /// <summary>
-        /// Configures TLS settings for the WebHostApp.
+        /// Enables TLS and applies the specified TLS settings to the application.
         /// </summary>
-        public WebHostBuilder UseTls(Action<SecurityOptions> securityOptions)
+        /// <param name="sslServerAuthenticationOptions">TLS configuration options to apply.</param>
+        /// <returns>The current <see cref="WebHostBuilder"/> instance.</returns>
+        public WebHostBuilder UseTls(SslServerAuthenticationOptions sslServerAuthenticationOptions)
         {
-            App.SecurityOptions.TlsEnabled = true;
-
-            securityOptions(App.SecurityOptions);
+            App._tlsEnabled = true;
+            App.SslServerAuthenticationOptions = sslServerAuthenticationOptions;
 
             return this;
         }
 
         /// <summary>
-        /// Sets the IP address and port for the WebHostApp endpoint.
+        /// Sets the IP address and port the application will bind to.
         /// </summary>
+        /// <param name="ipAddress">The IP address to bind to.</param>
+        /// <param name="port">The port number to listen on.</param>
+        /// <returns>The current <see cref="WebHostBuilder"/> instance.</returns>
         public WebHostBuilder SetEndpoint(IPAddress ipAddress, int port)
         {
             App._ipAddress = ipAddress;
@@ -72,8 +89,11 @@ public sealed partial class WebHostApp
         }
 
         /// <summary>
-        /// Sets the IP address (string) and port for the WebHostApp endpoint.
+        /// Sets the IP address (as a string) and port the application will bind to.
         /// </summary>
+        /// <param name="ipAddress">The IP address to bind to as a string.</param>
+        /// <param name="port">The port number to listen on.</param>
+        /// <returns>The current <see cref="WebHostBuilder"/> instance.</returns>
         public WebHostBuilder SetEndpoint(string ipAddress, int port)
         {
             App._ipAddress = IPAddress.Parse(ipAddress);
@@ -82,8 +102,10 @@ public sealed partial class WebHostApp
         }
 
         /// <summary>
-        /// Sets the port for the WebHostApp.
+        /// Sets the port the application will listen on.
         /// </summary>
+        /// <param name="port">The port number to use.</param>
+        /// <returns>The current <see cref="WebHostBuilder"/> instance.</returns>
         public WebHostBuilder SetPort(int port)
         {
             App._port = port;
@@ -91,8 +113,10 @@ public sealed partial class WebHostApp
         }
 
         /// <summary>
-        /// Sets the backlog size for the WebHostApp.
+        /// Sets the connection backlog size for incoming TCP connections.
         /// </summary>
+        /// <param name="backlog">The maximum number of pending connections.</param>
+        /// <returns>The current <see cref="WebHostBuilder"/> instance.</returns>
         public WebHostBuilder SetBacklog(int backlog)
         {
             App._backlog = backlog;
@@ -100,22 +124,43 @@ public sealed partial class WebHostApp
         }
 
         /// <summary>
-        /// Set webserver to use HTTP/0 custom version.
+        /// Sets the HTTP handler and the application protocol used for TLS negotiation.
         /// </summary>
-        public WebHostBuilder UseHttp11Multiplexed()
+        /// <param name="httpHandler">The HTTP handler to use for processing requests.</param>
+        /// <param name="sslApplicationProtocol">The ALPN protocol to advertise during the TLS handshake.</param>
+        /// <returns>The current <see cref="WebHostBuilder"/> instance.</returns>
+        public WebHostBuilder SetHttpHandler(IHttpHandler httpHandler, SslApplicationProtocol sslApplicationProtocol)
         {
-            App._useStandardHttp11Version = false;
+            App._httpHandler = httpHandler;
+            App.SslServerAuthenticationOptions.ApplicationProtocols = [sslApplicationProtocol];
             return this;
         }
 
         /// <summary>
-        /// Webserver will return files at a given resource path in the caller project.
+        /// Sets a default HTTP/1.1 handler that optionally serves static resources from the provided path and assembly.
         /// </summary>
-        public WebHostBuilder AddStaticFiles(Assembly resourcesAssembly, string resourcesPath)
+        /// <param name="useResources">Indicates whether static resources should be served.</param>
+        /// <param name="resourcePath">The root path of the resources to serve.</param>
+        /// <param name="resourceAssembly">The assembly where the resources are embedded.</param>
+        /// <returns>The current <see cref="WebHostBuilder"/> instance.</returns>
+        public WebHostBuilder SetDefaultHttpHandler(
+            bool useResources, 
+            string resourcePath, 
+            Assembly resourceAssembly)
         {
-            App._useStaticFiles = true;
-            App._resourcesPath = resourcesPath;
-            App._resourcesAssembly = resourcesAssembly;
+            App._httpHandler = new WebHostHttp11(useResources, resourcePath, resourceAssembly);
+            App.SslServerAuthenticationOptions.ApplicationProtocols = [SslApplicationProtocol.Http11];
+            return this;
+        }
+
+        /// <summary>
+        /// Sets a default HTTP/1.1 handler without static resource support.
+        /// </summary>
+        /// <returns>The current <see cref="WebHostBuilder"/> instance.</returns>
+        public WebHostBuilder SetDefaultHttpHandler()
+        {
+            App._httpHandler = new WebHostHttp11(false, null!, null!);
+            App.SslServerAuthenticationOptions.ApplicationProtocols = [SslApplicationProtocol.Http11];
             return this;
         }
     }
