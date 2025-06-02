@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace WebHost.Http11;
 
-public sealed partial class WebHostHttp11
+public sealed partial class WebHostHttp11<TContext>
 {
     /// <summary>
     /// Attempts to extract the HTTP method and uri path from a collection of headers.

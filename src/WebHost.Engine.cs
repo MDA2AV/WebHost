@@ -6,22 +6,22 @@ using Microsoft.Extensions.Logging;
 
 namespace WebHost;
 
-public sealed partial class WebHostApp
+public sealed partial class WebHostApp<TContext>
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="WebHostApp"/> class with a default host builder configuration.
+    /// Initializes a new instance of the <see cref="WebHostApp{TContext}"/> class with a default host builder configuration.
     /// </summary>
     /// <remarks>
-    /// - Configures a default host builder using <see cref="Host.CreateDefaultBuilder"/>.
+    /// - Configures a default host builder using <see cref="Host.CreateDefaultBuilder()"/>.
     /// - Registers a hosted service based on the current TLS settings in <see cref="SslServerAuthenticationOptions"/>.
     /// - If TLS is enabled, a TLS-enabled engine is created; otherwise, a plain engine is used.
     /// </remarks>
-    private WebHostApp()
+    internal WebHostApp()
     {
         HostBuilder = Host.CreateDefaultBuilder()
             .ConfigureServices((hostContext, services) =>
             {
-                services.AddHostedService(_ => _tlsEnabled
+                services.AddHostedService(_ => TlsEnabled
                     ? CreateTlsEnabledEngine()
                     : CreatePlainEngine());
             });
@@ -70,10 +70,10 @@ public sealed partial class WebHostApp
 
         socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true); // Enable TCP Keep-Alive
 
-        socket.Bind(new IPEndPoint(_ipAddress, _port));
-        socket.Listen(_backlog);
+        socket.Bind(new IPEndPoint(IpAddress, Port));
+        socket.Listen(Backlog);
 
-        _logger?.LogTrace("Created listening socket {SocketHash}", socket.GetHashCode());
+        Logger?.LogTrace("Created listening socket {SocketHash}", socket.GetHashCode());
         return socket;
     }
 
@@ -102,18 +102,18 @@ public sealed partial class WebHostApp
                 //
                 _ = Task.Run(async () =>
                 {
-                    _logger?.LogTrace("Handling client socket {ClientHash}", client.GetHashCode());
+                    Logger?.LogTrace("Handling client socket {ClientHash}", client.GetHashCode());
                     try
                     {
                         await clientHandler(client, stoppingToken);
                     }
                     catch(Exception ex)
                     {
-                        _logger?.LogTrace("Client could not be handled: {Exception}", ex);
+                        Logger?.LogTrace("Client could not be handled: {Exception}", ex);
                     }
                     finally
                     {
-                        _logger?.LogTrace("Disposing client socket {ClientHash}", client.GetHashCode());
+                        Logger?.LogTrace("Disposing client socket {ClientHash}", client.GetHashCode());
                         client.Dispose(); // Ensure the client socket is disposed after use
                     }
                 }, stoppingToken);
@@ -121,7 +121,7 @@ public sealed partial class WebHostApp
         }
         finally
         {
-            _logger?.LogTrace("Disposing listening socket {SocketHash}", socket.GetHashCode());
+            Logger?.LogTrace("Disposing listening socket {SocketHash}", socket.GetHashCode());
             socket.Dispose(); // Dispose of the listening socket when the loop exits
         }
     }

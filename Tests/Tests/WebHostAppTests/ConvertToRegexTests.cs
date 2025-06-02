@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using WebHost;
+using WebHost.Http11.Context;
 
 namespace Tests.WebHostAppTests;
 
@@ -12,7 +13,7 @@ public class ConvertToRegexTests
         var pattern = "/users/:id/details";
 
         // Act
-        var regexPattern = WebHostApp.ConvertToRegex(pattern);
+        var regexPattern = WebHostApp<Http11Context>.ConvertToRegex(pattern);
 
         // Assert
         Assert.Equal("^/users/[^/]+/details$", regexPattern);
@@ -27,7 +28,7 @@ public class ConvertToRegexTests
     public void ConvertToRegex_ShouldMatchInputCorrectly(string pattern, string input, bool isMatch)
     {
         // Arrange
-        var regexPattern = WebHostApp.ConvertToRegex(pattern);
+        var regexPattern = WebHostApp<Http11Context>.ConvertToRegex(pattern);
 
         // Act
         var match = Regex.IsMatch(input, regexPattern);

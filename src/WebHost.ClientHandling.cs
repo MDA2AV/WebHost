@@ -1,17 +1,15 @@
-﻿using System.Buffers;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.IO.Pipelines;
 using System.Security;
 
 namespace WebHost;
 
-public sealed partial class WebHostApp
+public sealed partial class WebHostApp<TContext>
 {
     /// <summary>
     /// Handles a client connection using plain (non-TLS) communication.
@@ -26,10 +24,8 @@ public sealed partial class WebHostApp
     /// </remarks>
     private async Task HandlePlainClientAsync(Socket client, CancellationToken stoppingToken)
     {
-        StreamPipeReaderOptions readerOptions = new(MemoryPool<byte>.Shared, leaveOpen: true, bufferSize: 65535);
         var stream = new NetworkStream(client);
-
-        await _httpHandler.HandleClientAsync(stream, PipeReader.Create(stream, readerOptions), Pipeline, stoppingToken);
+        await HttpHandler.HandleClientAsync(stream, Pipeline, stoppingToken);
     }
 
     /// <summary>
@@ -78,9 +74,8 @@ public sealed partial class WebHostApp
 
         // Handle the client connection securely
         //
-        await _httpHandler.HandleClientAsync(
-            sslStream, 
-            PipeReader.Create(sslStream, new StreamPipeReaderOptions(MemoryPool<byte>.Shared, leaveOpen: true, bufferSize: 65535)),
+        await HttpHandler.HandleClientAsync(
+            sslStream,
             Pipeline,
             stoppingToken);
     }
@@ -95,13 +90,13 @@ public sealed partial class WebHostApp
         switch (ex)
         {
             case AuthenticationException authEx:
-                _logger?.LogTrace("TLS Handshake failed due to authentication error: {Message}", authEx.Message);
+                Logger?.LogTrace("TLS Handshake failed due to authentication error: {Message}", authEx.Message);
                 break;
             case InvalidOperationException invalidOpEx:
-                _logger?.LogTrace("TLS Handshake failed due to socket error: {Message}", invalidOpEx.Message);
+                Logger?.LogTrace("TLS Handshake failed due to socket error: {Message}", invalidOpEx.Message);
                 break;
             default:
-                _logger?.LogTrace("Unexpected error during TLS Handshake: {Message}", ex.Message);
+                Logger?.LogTrace("Unexpected error during TLS Handshake: {Message}", ex.Message);
                 break;
         }
 
@@ -113,7 +108,7 @@ public sealed partial class WebHostApp
     /// All elements are resolved within the context.Scope.IServiceProvider.
     /// </summary>
     /// <exception cref="InvalidOperationException"></exception>
-    public Task Pipeline(IContext context, int index, IList<Func<IContext, Func<IContext, Task>, Task>> middleware)
+    public Task Pipeline(TContext context, int index, IList<Func<TContext, Func<TContext, Task>, Task>> middleware)
     {
         if (index < middleware.Count)
         {
@@ -123,7 +118,7 @@ public sealed partial class WebHostApp
         var decodedRoute = MatchEndpoint(EncodedRoutes[context.Request.HttpMethod.ToUpper()], context.Request.Route);
 
         var endpoint = context.Scope.ServiceProvider
-            .GetRequiredKeyedService<Func<IContext, Task>>($"{context.Request.HttpMethod}_{decodedRoute}");
+            .GetRequiredKeyedService<Func<TContext, Task>>($"{context.Request.HttpMethod}_{decodedRoute}");
 
         return endpoint is null
             ? throw new InvalidOperationException("Unable to find the Invoke method on the resolved service.")
@@ -143,11 +138,11 @@ public sealed partial class WebHostApp
     /// <item><description>Creates a new service scope for the lifetime of the request and assigns it to the context.</description></item>
     /// <item><description>Recursively invokes the middleware pipeline starting from index 0.</description></item>
     /// </list>
-    /// Called by the <see cref="IHttpHandler.HandleClientAsync"/> implementation to process each incoming request.
+    /// Called by the <see cref="IHttpHandler{TContext}.HandleClientAsync"/> implementation to process each incoming request.
     /// </remarks>
-    public async Task Pipeline(IContext context)
+    public async Task Pipeline(TContext context)
     {
-        var middleware = InternalHost.Services.GetServices<Func<IContext, Func<IContext, Task>, Task>>().ToList();
+        var middleware = InternalHost.Services.GetServices<Func<TContext, Func<TContext, Task>, Task>>().ToList();
 
         await using var scope = InternalHost.Services.CreateAsyncScope();
         context.Scope = scope;

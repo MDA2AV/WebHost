@@ -1,4 +1,5 @@
 ﻿using WebHost;
+using WebHost.Http11.Context;
 
 namespace Tests.WebHostAppTests;
 
@@ -17,7 +18,7 @@ public class MatchEndpointTests
         const string input = "/products/456";
 
         // Act
-        var result = WebHostApp.MatchEndpoint(hashSet, input);
+        var result = WebHostApp<Http11Context>.MatchEndpoint(hashSet, input);
 
         // Assert
         Assert.Equal("/products/:productId", result);
@@ -36,7 +37,7 @@ public class MatchEndpointTests
         const string input = "/categories/123";
 
         // Act
-        var result = WebHostApp.MatchEndpoint(hashSet, input);
+        var result = WebHostApp<Http11Context>.MatchEndpoint(hashSet, input);
 
         // Assert
         Assert.Null(result);

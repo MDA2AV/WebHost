@@ -1,10 +1,27 @@
-﻿using System.IO.Pipelines;
+﻿using System.Buffers;
+using System.IO.Pipelines;
+using System.Reflection;
 using System.Text;
 using WebHost.Http11.Context;
 
 namespace WebHost.Http11;
 
-public partial class WebHostHttp11
+public interface IHandlerArgs
+{
+    bool UseResources { get; set; }
+    string ResourcesPath { get; set; }
+    Assembly ResourcesAssembly { get; set; }
+}
+
+public class Http11HandlerArgs : IHandlerArgs
+{
+    public bool UseResources { get; set; }
+    public string ResourcesPath { get; set; } = null!;
+    public Assembly ResourcesAssembly { get; set; } = null!;
+}
+
+public partial class WebHostHttp11<TContext>(IHandlerArgs args) : IHttpHandler<TContext>
+    where TContext : IContext, new()
 {
     /// <summary>
     /// Defines the types of HTTP connection behaviors supported by the web host.
@@ -69,7 +86,6 @@ public partial class WebHostHttp11
     /// Handles a client connection by processing incoming HTTP/1.1 requests and executing the middleware pipeline.
     /// </summary>
     /// <param name="stream">The network stream for communication with the client.</param>
-    /// <param name="pipeReader">A pipe reader for efficiently reading data from the client.</param>
     /// <param name="pipeline"></param>
     /// <param name="stoppingToken">A <see cref="CancellationToken"/> to signal when the operation should stop.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
@@ -113,14 +129,16 @@ public partial class WebHostHttp11
     /// <exception cref="ArrayTypeMismatchException"/>
     /// 
     /// <exception cref="ObjectDisposedException"/>
-    public async Task HandleClientAsync(Stream stream, PipeReader pipeReader, Func<IContext, Task> pipeline, CancellationToken stoppingToken)
+    public async Task HandleClientAsync(Stream stream, Func<TContext, Task> pipeline, CancellationToken stoppingToken)
     {
         // Create a new context for this client connection
-        var context = new Http11Context
+        var context = new TContext
         {
             Stream = stream,
-            PipeReader = pipeReader
         };
+
+        var pipeReader = PipeReader.Create(stream,
+            new StreamPipeReaderOptions(MemoryPool<byte>.Shared, leaveOpen: true, bufferSize: 65535));
 
         // Read the initial client request headers
         var headers = await ExtractHeaders(pipeReader, stoppingToken);
@@ -150,7 +168,7 @@ public partial class WebHostHttp11
             var uriParams = uriHeader.Item2.Split('?');
 
             // Check if the request is for a static file
-            if (IsRouteFile(uriParams[0]) & UseResources)
+            if (UseResources & IsRouteFile(uriParams[0]))
             {
                 // Serve the static file from embedded resources
                 await FlushResource(stream, uriParams);

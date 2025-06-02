@@ -1,4 +1,5 @@
 ﻿using WebHost.Http11;
+using WebHost.Http11.Context;
 
 namespace Tests.UtilsTests.HeaderParserTests;
 
@@ -11,7 +12,7 @@ public class TryExtractUriTests
         var headers = new List<string> { "GET /api/resource?param=1 HTTP/1.1" };
 
         // Act
-        var result = WebHostHttp11.TryExtractUri(headers, out var route);
+        var result = WebHostHttp11<Http11Context>.TryExtractUri(headers, out var route);
 
         // Assert
         Assert.True(result);
@@ -26,7 +27,7 @@ public class TryExtractUriTests
         var headers = new List<string> { "POST /submit/data HTTP/1.1" };
 
         // Act
-        var result = WebHostHttp11.TryExtractUri(headers, out var route);
+        var result = WebHostHttp11<Http11Context>.TryExtractUri(headers, out var route);
 
         // Assert
         Assert.True(result);
@@ -45,7 +46,7 @@ public class TryExtractUriTests
         };
 
         // Act
-        var result = WebHostHttp11.TryExtractUri(headers, out var route);
+        var result = WebHostHttp11<Http11Context>.TryExtractUri(headers, out var route);
 
         // Assert
         Assert.True(result);
@@ -60,7 +61,7 @@ public class TryExtractUriTests
         var headers = new List<string> { "Host: localhost", "Content-Type: application/json" };
 
         // Act
-        var result = WebHostHttp11.TryExtractUri(headers, out var route);
+        var result = WebHostHttp11<Http11Context>.TryExtractUri(headers, out var route);
 
         // Assert
         Assert.False(result);
@@ -74,7 +75,7 @@ public class TryExtractUriTests
         var headers = new List<string> { "FOO /api/resource HTTP/1.1" };
 
         // Act
-        var result = WebHostHttp11.TryExtractUri(headers, out var route);
+        var result = WebHostHttp11<Http11Context>.TryExtractUri(headers, out var route);
 
         // Assert
         Assert.False(result);
@@ -88,7 +89,7 @@ public class TryExtractUriTests
         var headers = new List<string>();
 
         // Act
-        var result = WebHostHttp11.TryExtractUri(headers, out var route);
+        var result = WebHostHttp11<Http11Context>.TryExtractUri(headers, out var route);
 
         // Assert
         Assert.False(result);
@@ -102,7 +103,7 @@ public class TryExtractUriTests
         IEnumerable<string>? headers = null;
 
         // Act
-        var result = WebHostHttp11.TryExtractUri(headers, out var route);
+        var result = WebHostHttp11<Http11Context>.TryExtractUri(headers, out var route);
 
         // Assert
         Assert.False(result);
@@ -116,7 +117,7 @@ public class TryExtractUriTests
         var headers = new List<string> { "  GET   /api/resource  HTTP/1.1   " };
 
         // Act
-        var result = WebHostHttp11.TryExtractUri(headers, out var route);
+        var result = WebHostHttp11<Http11Context>.TryExtractUri(headers, out var route);
 
         // Assert
         Assert.True(result);
@@ -131,7 +132,7 @@ public class TryExtractUriTests
         var headers = new List<string> { "GET /api/resource HTTP/2.0" };
 
         // Act
-        var result = WebHostHttp11.TryExtractUri(headers, out var route);
+        var result = WebHostHttp11<Http11Context>.TryExtractUri(headers, out var route);
 
         // Assert
         Assert.True(result);

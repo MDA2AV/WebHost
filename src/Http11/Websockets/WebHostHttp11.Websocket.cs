@@ -4,7 +4,7 @@ using WebHost.Http11.Context;
 
 namespace WebHost.Http11;
 
-public sealed partial class WebHostHttp11
+public sealed partial class WebHostHttp11<TContext>
 {
     private static readonly ReadOnlyMemory<byte> WebsocketHandshakePrefix
         = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "u8.ToArray();

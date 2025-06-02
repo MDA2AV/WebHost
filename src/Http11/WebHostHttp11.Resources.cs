@@ -4,14 +4,11 @@ using System.Text;
 
 namespace WebHost.Http11;
 
-public sealed partial class WebHostHttp11(
-    bool useResources,
-    string resourcesPath,
-    Assembly resourcesAssembly) : IHttpHandler
+public sealed partial class WebHostHttp11<TContext>
 { 
-    public bool UseResources { get; } = useResources;
-    public string ResourcesPath { get; } = resourcesPath;
-    public Assembly ResourcesAssembly { get; } = resourcesAssembly;
+    public bool UseResources { get; } = args.UseResources;
+    public string ResourcesPath { get; } = args.ResourcesPath;
+    public Assembly ResourcesAssembly { get; } = args.ResourcesAssembly;
 
 
     private static readonly ArrayPool<byte> BufferPool = ArrayPool<byte>.Shared;
