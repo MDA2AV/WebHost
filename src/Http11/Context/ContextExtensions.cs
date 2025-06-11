@@ -9,26 +9,6 @@ namespace WebHost.Http11.Context;
 public static class Extensions
 {
     /// <summary>
-    /// Sends a response to the client using a specified <see cref="IResponseBuilder"/>.
-    /// </summary>
-    /// <param name="context">The <see cref="IContext"/> representing the current client connection.</param>
-    /// <param name="responseBuilder">The <see cref="IResponseBuilder"/> used to build and handle the response.</param>
-    /// <param name="cancellationToken"></param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    /// <exception cref="ArgumentNullException">
-    /// Thrown if <paramref name="responseBuilder"/> is <c>null</c>.
-    /// </exception>
-    public static async Task RespondAsync(this IContext context, IResponseBuilder responseBuilder, CancellationToken cancellationToken = default)
-    {
-        if (responseBuilder == null)
-        {
-            throw new ArgumentNullException(nameof(responseBuilder));
-        }
-
-        await responseBuilder.HandleAsync(context, cancellationToken);
-    }
-
-    /// <summary>
     /// Sends a string response to the client.
     /// </summary>
     /// <param name="context">The <see cref="IContext"/> representing the current client connection.</param>

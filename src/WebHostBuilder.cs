@@ -4,6 +4,8 @@ using System.Net.Security;
 using System.Net;
 using System.Reflection;
 using WebHost.Attributes;
+using WebHost.Http11;
+using WebHost.Http11.Context;
 
 namespace WebHost;
 
@@ -23,9 +25,9 @@ public sealed class WebHostBuilder<THandler, TContext>
     /// Initializes a new instance using the specified handler factory.
     /// </summary>
     /// <param name="handlerFactory">Factory that creates an instance of <typeparamref name="THandler"/>.</param>
-    public WebHostBuilder(Func<THandler> handlerFactory)
+    public WebHostBuilder(Func<WebHostApp<TContext>, THandler> handlerFactory)
     {
-        App.HttpHandler = handlerFactory();
+        App.HttpHandler = handlerFactory(App);
         App.SslServerAuthenticationOptions.ApplicationProtocols = [SslApplicationProtocol.Http11];
     }
 
@@ -34,9 +36,9 @@ public sealed class WebHostBuilder<THandler, TContext>
     /// </summary>
     /// <param name="handlerFactory">Factory that creates an instance of <typeparamref name="THandler"/>.</param>
     /// <param name="sslApplicationProtocols">A list of supported TLS ALPN protocols.</param>
-    public WebHostBuilder(Func<THandler> handlerFactory, List<SslApplicationProtocol> sslApplicationProtocols)
+    public WebHostBuilder(Func<WebHostApp<TContext>, THandler> handlerFactory, List<SslApplicationProtocol> sslApplicationProtocols)
     {
-        App.HttpHandler = handlerFactory();
+        App.HttpHandler = handlerFactory(App);
         App.SslServerAuthenticationOptions.ApplicationProtocols = sslApplicationProtocols;
     }
 
@@ -149,6 +151,12 @@ public sealed class WebHostBuilder<THandler, TContext>
             services.AddScoped<Func<TContext, Func<TContext, Task>, Task>>(func));
         return this;
     }
+    public WebHostBuilder<THandler, TContext> UseMiddleware(Func<IServiceProvider, Func<TContext, Func<TContext, Task<IResponse>>, Task<IResponse>>> func)
+    {
+        App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddScoped<Func<TContext, Func<TContext, Task<IResponse>>, Task<IResponse>>>(func));
+        return this;
+    }
 
     /// <summary>
     /// Registers a route delegate for processing HTTP GET requests.
@@ -158,6 +166,13 @@ public sealed class WebHostBuilder<THandler, TContext>
         App.EncodedRoutes[HttpConstants.Get].Add(route);
         App.HostBuilder.ConfigureServices((_, services) =>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Get}_{route}", (sp, key) => func(sp)));
+        return this;
+    }
+    public WebHostBuilder<THandler, TContext> MapGet(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    {
+        App.EncodedRoutes[HttpConstants.Get].Add(route);
+        App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Get}_{route}", (sp, key) => func(sp)));
         return this;
     }
 
@@ -172,6 +187,14 @@ public sealed class WebHostBuilder<THandler, TContext>
         return this;
     }
 
+    public WebHostBuilder<THandler, TContext> MapPost(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    {
+        App.EncodedRoutes[HttpConstants.Post].Add(route);
+        App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Post}_{route}", (sp, key) => func(sp)));
+        return this;
+    }
+
     /// <summary>
     /// Registers a route delegate for processing HTTP PUT requests.
     /// </summary>
@@ -180,6 +203,13 @@ public sealed class WebHostBuilder<THandler, TContext>
         App.EncodedRoutes[HttpConstants.Put].Add(route);
         App.HostBuilder.ConfigureServices((_, services) =>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Put}_{route}", (sp, key) => func(sp)));
+        return this;
+    }
+    public WebHostBuilder<THandler, TContext> MapPut(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    {
+        App.EncodedRoutes[HttpConstants.Put].Add(route);
+        App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Put}_{route}", (sp, key) => func(sp)));
         return this;
     }
 
@@ -193,6 +223,13 @@ public sealed class WebHostBuilder<THandler, TContext>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Delete}_{route}", (sp, key) => func(sp)));
         return this;
     }
+    public WebHostBuilder<THandler, TContext> MapDelete(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    {
+        App.EncodedRoutes[HttpConstants.Delete].Add(route);
+        App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Delete}_{route}", (sp, key) => func(sp)));
+        return this;
+    }
 
     /// <summary>
     /// Registers a route delegate for processing HTTP PATCH requests.
@@ -202,6 +239,13 @@ public sealed class WebHostBuilder<THandler, TContext>
         App.EncodedRoutes[HttpConstants.Patch].Add(route);
         App.HostBuilder.ConfigureServices((_, services) =>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Patch}_{route}", (sp, key) => func(sp)));
+        return this;
+    }
+    public WebHostBuilder<THandler, TContext> MapPatch(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    {
+        App.EncodedRoutes[HttpConstants.Patch].Add(route);
+        App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Patch}_{route}", (sp, key) => func(sp)));
         return this;
     }
 
@@ -215,6 +259,13 @@ public sealed class WebHostBuilder<THandler, TContext>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Head}_{route}", (sp, key) => func(sp)));
         return this;
     }
+    public WebHostBuilder<THandler, TContext> MapHead(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    {
+        App.EncodedRoutes[HttpConstants.Head].Add(route);
+        App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Head}_{route}", (sp, key) => func(sp)));
+        return this;
+    }
 
     /// <summary>
     /// Registers a route delegate for processing HTTP OPTIONS requests.
@@ -224,6 +275,13 @@ public sealed class WebHostBuilder<THandler, TContext>
         App.EncodedRoutes[HttpConstants.Options].Add(route);
         App.HostBuilder.ConfigureServices((_, services) =>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Options}_{route}", (sp, key) => func(sp)));
+        return this;
+    }
+    public WebHostBuilder<THandler, TContext> MapOptions(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    {
+        App.EncodedRoutes[HttpConstants.Options].Add(route);
+        App.HostBuilder.ConfigureServices((_, services) =>
+            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Options}_{route}", (sp, key) => func(sp)));
         return this;
     }
 }

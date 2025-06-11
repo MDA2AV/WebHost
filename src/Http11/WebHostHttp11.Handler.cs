@@ -1,26 +1,28 @@
-﻿using System.Buffers;
+﻿using Microsoft.Extensions.DependencyInjection;
+using System.Buffers;
 using System.IO.Pipelines;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using WebHost.Http11.Context;
 
 namespace WebHost.Http11;
 
 public interface IHandlerArgs
 {
-    bool UseResources { get; set; }
-    string ResourcesPath { get; set; }
-    Assembly ResourcesAssembly { get; set; }
+    bool UseResources { get; }
+    string ResourcesPath { get; }
+    Assembly ResourcesAssembly { get; }
+    bool UseResponse { get; }
 }
 
-public class Http11HandlerArgs : IHandlerArgs
-{
-    public bool UseResources { get; set; }
-    public string ResourcesPath { get; set; } = null!;
-    public Assembly ResourcesAssembly { get; set; } = null!;
-}
+public record Http11HandlerArgs(
+    bool UseResources,
+    string ResourcesPath,
+    Assembly ResourcesAssembly,
+    bool UseResponse) : IHandlerArgs;
 
-public partial class WebHostHttp11<TContext>(IHandlerArgs args) : IHttpHandler<TContext>
+public partial class WebHostHttp11<TContext>(WebHostApp<TContext> app, IHandlerArgs args) : IHttpHandler<TContext>
     where TContext : IContext, new()
 {
     /// <summary>
@@ -86,7 +88,6 @@ public partial class WebHostHttp11<TContext>(IHandlerArgs args) : IHttpHandler<T
     /// Handles a client connection by processing incoming HTTP/1.1 requests and executing the middleware pipeline.
     /// </summary>
     /// <param name="stream">The network stream for communication with the client.</param>
-    /// <param name="pipeline"></param>
     /// <param name="stoppingToken">A <see cref="CancellationToken"/> to signal when the operation should stop.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     /// <remarks>
@@ -129,7 +130,8 @@ public partial class WebHostHttp11<TContext>(IHandlerArgs args) : IHttpHandler<T
     /// <exception cref="ArrayTypeMismatchException"/>
     /// 
     /// <exception cref="ObjectDisposedException"/>
-    public async Task HandleClientAsync(Stream stream, Func<TContext, Task> pipeline, CancellationToken stoppingToken)
+    //public async Task HandleClientAsync(Stream stream, Func<TContext, Task<IResponse>> pipeline, CancellationToken stoppingToken)
+    public async Task HandleClientAsync(Stream stream, CancellationToken stoppingToken)
     {
         // Create a new context for this client connection
         var context = new TContext
@@ -186,7 +188,17 @@ public partial class WebHostHttp11<TContext>(IHandlerArgs args) : IHttpHandler<T
                     QueryParameters: uriParams.Length > 1 ? uriParams[1] : string.Empty,
                     HttpMethod: uriHeader.Item1);
 
-                await pipeline(context);
+
+                if (args.UseResponse)
+                {
+                    // Execute the middleware pipeline and respond to the client
+                    await PipelineAndRespond(context);
+                }
+                else
+                {
+                    // In case the response is handled by the user
+                    await PipelineNoResponse(context);
+                }
             }
 
             // For keep-alive connections, try to read the next request
@@ -200,5 +212,130 @@ public partial class WebHostHttp11<TContext>(IHandlerArgs args) : IHttpHandler<T
                 break;
             }
         }
+    }
+
+    public async Task PipelineAndRespond(TContext context)
+    {
+        var response = await Pipeline(context);
+
+        response.Dispose();
+    }
+}
+
+public sealed partial class WebHostHttp11<TContext>
+{
+    /// <summary>
+    /// Recursively executes the registered middleware by order of registration and invokes the final endpoint.
+    /// </summary>
+    /// <param name="context">The current HTTP request context, representing the state of the incoming request.</param>
+    /// <param name="index">The current index in the middleware pipeline to start executing from.</param>
+    /// <param name="middleware">A list of middleware components to be executed in order.</param>
+    /// <returns>A task representing the asynchronous operation that processes the pipeline and returns a response.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if no endpoint is found for the decoded route.</exception>
+    public Task<IResponse> Pipeline(
+        TContext context,
+        int index,
+        IList<Func<TContext, Func<TContext, Task<IResponse>>, Task<IResponse>>> middleware)
+    {
+        if (index < middleware.Count)
+        {
+            return middleware[index](context, async (ctx) => await Pipeline(ctx, index + 1, middleware));
+        }
+
+        var decodedRoute = MatchEndpoint(app.EncodedRoutes[context.Request.HttpMethod.ToUpper()], context.Request.Route);
+
+        var endpoint = context.Scope.ServiceProvider
+            .GetRequiredKeyedService<Func<TContext, Task<IResponse>>>(
+                $"{context.Request.HttpMethod}_{decodedRoute}");
+
+        return endpoint.Invoke(context);
+    }
+
+    /// <summary>
+    /// Executes the registered middleware pipeline and returns a response by invoking the final endpoint.
+    /// </summary>
+    /// <param name="context">The current HTTP request context, representing the state of the incoming request.</param>
+    /// <returns>A task representing the asynchronous operation that processes the pipeline and returns a response.</returns>
+    public async Task<IResponse> Pipeline(TContext context)
+    {
+        var middleware = app.InternalHost.Services
+            .GetServices<Func<TContext, Func<TContext, Task<IResponse>>, Task<IResponse>>>()
+            .ToList();
+
+        await using var scope = app.InternalHost.Services.CreateAsyncScope();
+        context.Scope = scope;
+
+        return await Pipeline(context, 0, middleware);
+    }
+
+    /// <summary>
+    /// Executes the registered middleware pipeline without expecting a response. Invokes the endpoint without returning a response.
+    /// </summary>
+    /// <param name="context">The current HTTP request context, representing the state of the incoming request.</param>
+    /// <param name="index">The current index in the middleware pipeline to start executing from.</param>
+    /// <param name="middleware">A list of middleware components to be executed in order.</param>
+    /// <returns>A task representing the asynchronous operation that processes the middleware pipeline without returning a response.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if no endpoint is found for the decoded route.</exception>
+    public Task PipelineNoResponse(TContext context, int index, IList<Func<TContext, Func<TContext, Task>, Task>> middleware)
+    {
+        if (index < middleware.Count)
+        {
+            return middleware[index](context, async (ctx) => await PipelineNoResponse(ctx, index + 1, middleware));
+        }
+
+        var decodedRoute = MatchEndpoint(app.EncodedRoutes[context.Request.HttpMethod.ToUpper()], context.Request.Route);
+
+        var endpoint = context.Scope.ServiceProvider
+            .GetRequiredKeyedService<Func<TContext, Task>>($"{context.Request.HttpMethod}_{decodedRoute}");
+
+        return endpoint is null
+            ? throw new InvalidOperationException("Unable to find the Invoke method on the resolved service.")
+            : endpoint.Invoke(context);
+    }
+
+    /// <summary>
+    /// Executes the registered middleware pipeline without expecting a response. Invokes the endpoint and completes the operation asynchronously.
+    /// </summary>
+    /// <param name="context">The current HTTP request context, representing the state of the incoming request.</param>
+    /// <returns>A task representing the asynchronous operation that processes the middleware pipeline without returning a response.</returns>
+    public async Task PipelineNoResponse(TContext context)
+    {
+        var middleware = app.InternalHost.Services.GetServices<Func<TContext, Func<TContext, Task>, Task>>().ToList();
+
+        await using var scope = app.InternalHost.Services.CreateAsyncScope();
+        context.Scope = scope;
+
+        await PipelineNoResponse(context, 0, middleware);
+    }
+
+    /// <summary>
+    /// Matches a given input string against a set of encoded route patterns.
+    /// </summary>
+    /// <param name="hashSet">A <see cref="HashSet{T}"/> containing route patterns to match against.</param>
+    /// <param name="input">The input string (route) to match against the patterns.</param>
+    /// <returns>The first matching route pattern from the <paramref name="hashSet"/>, or <c>null</c> if no match is found.</returns>
+    public static string? MatchEndpoint(HashSet<string> hashSet, string input)
+    {
+        return (from entry in hashSet
+                let pattern = ConvertToRegex(entry) // Convert route pattern to regex
+                where Regex.IsMatch(input, pattern) // Check if input matches the regex
+                select entry) // Select the matching pattern
+            .FirstOrDefault(); // Return the first match or null if no match is found
+    }
+
+    /// <summary>
+    /// Converts a route pattern with placeholders (e.g., ":id") into a regular expression.
+    /// </summary>
+    /// <param name="pattern">The route pattern to convert into a regex format.</param>
+    /// <returns>A regex string that matches the given pattern.</returns>
+    public static string ConvertToRegex(string pattern)
+    {
+        // Replace placeholders like ":id" with a regex pattern that matches any non-slash characters
+        var regexPattern = Regex.Replace(pattern, @":\w+", "[^/]+");
+
+        // Add anchors to ensure the regex matches the entire input string
+        regexPattern = $"^{regexPattern}$";
+
+        return regexPattern;
     }
 }

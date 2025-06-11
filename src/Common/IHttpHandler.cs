@@ -1,9 +1,12 @@
-﻿namespace WebHost;
+﻿using WebHost.Http11.Context;
+
+namespace WebHost;
 
 /// <summary>
 /// Defines a contract for handling client connections using a custom or HTTP-based protocol.
 /// </summary>
-public interface IHttpHandler<out TContext> where TContext : IContext
+public interface IHttpHandler<out TContext> 
+    where TContext : IContext
 {
     /// <summary>
     /// Processes a client connection and dispatches one or more protocol-compliant requests.
@@ -18,8 +21,16 @@ public interface IHttpHandler<out TContext> where TContext : IContext
     /// <returns>
     /// A <see cref="Task"/> that represents the asynchronous operation of handling the client session.
     /// </returns>
+    
+    /*
     Task HandleClientAsync(
         Stream stream,
         Func<TContext, Task> pipeline,
+        CancellationToken stoppingToken);
+    */
+
+    Task HandleClientAsync(
+        Stream stream,
+        //Func<TContext, Task<IResponse>> pipeline,
         CancellationToken stoppingToken);
 }

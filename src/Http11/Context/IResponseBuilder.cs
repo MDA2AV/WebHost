@@ -3,7 +3,7 @@
 /// <summary>
 /// Defines a contract for building and handling responses in the application.
 /// </summary>
-public interface IResponseBuilder
+public interface IResponseBuilder2
 {
     /// <summary>
     /// Handles the response logic asynchronously based on the provided context.
