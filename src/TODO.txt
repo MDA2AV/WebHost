@@ -1,0 +1,25 @@
+﻿Http11
+
+	- Improve response middleware for better performance : Done
+
+	- Improve request handling, use pooled dictionaries?
+
+	- Use ObjectPool<T> for IContext
+
+	- Add HandleAsync overload to handle pipelines that return Task<IResponse> instead of Task (low priority)
+
+
+
+WebHostApp
+
+	- Webservices/controllerish registering possibility? Having extensions for MapGet etc is a pain
+
+
+
+Modules
+
+	- Caching with ETags
+
+	- Authorization with JWTs
+
+	- Cors

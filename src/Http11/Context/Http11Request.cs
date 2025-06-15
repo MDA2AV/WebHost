@@ -1,7 +1,9 @@
-﻿namespace WebHost.Http11.Context;
+﻿using WebHost.MemoryBuffers;
+
+namespace WebHost.Http11.Context;
 
 public record Http11Request(
-    IEnumerable<string> Headers,
+    PooledDictionary<string, string> Headers,
     byte[]? Body,
     string Route,
     string HttpMethod,

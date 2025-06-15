@@ -1,10 +1,11 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using System.Buffers;
+﻿using System.Buffers;
 using System.IO.Pipelines;
 using System.Reflection;
+using System.Reflection.PortableExecutable;
 using System.Text;
-using System.Text.RegularExpressions;
 using WebHost.Http11.Context;
+using WebHost.MemoryBuffers;
+using WebHost.Protocol;
 
 namespace WebHost.Http11;
 
@@ -13,16 +14,14 @@ public interface IHandlerArgs
     bool UseResources { get; }
     string ResourcesPath { get; }
     Assembly ResourcesAssembly { get; }
-    bool UseResponse { get; }
 }
 
 public record Http11HandlerArgs(
     bool UseResources,
     string ResourcesPath,
-    Assembly ResourcesAssembly,
-    bool UseResponse) : IHandlerArgs;
+    Assembly ResourcesAssembly) : IHandlerArgs;
 
-public partial class WebHostHttp11<TContext>(WebHostApp<TContext> app, IHandlerArgs args) : IHttpHandler<TContext>
+public partial class WebHostHttp11<TContext>(IHandlerArgs args) : IHttpHandler<TContext>
     where TContext : IContext, new()
 {
     /// <summary>
@@ -84,10 +83,22 @@ public partial class WebHostHttp11<TContext>(WebHostApp<TContext> app, IHandlerA
             : ConnectionType.Close;
     }
 
+    private static ConnectionType GetConnectionType2(string connectionType)
+    {
+        return connectionType switch
+        {
+            "keep-alive" => ConnectionType.KeepAlive,
+            "close" => ConnectionType.Close,
+            "websocket" => ConnectionType.Websocket,
+            _ => ConnectionType.Close
+        };
+    }
+
     /// <summary>
     /// Handles a client connection by processing incoming HTTP/1.1 requests and executing the middleware pipeline.
     /// </summary>
     /// <param name="stream">The network stream for communication with the client.</param>
+    /// <param name="pipeline"></param>
     /// <param name="stoppingToken">A <see cref="CancellationToken"/> to signal when the operation should stop.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     /// <remarks>
@@ -131,7 +142,116 @@ public partial class WebHostHttp11<TContext>(WebHostApp<TContext> app, IHandlerA
     /// 
     /// <exception cref="ObjectDisposedException"/>
     //public async Task HandleClientAsync(Stream stream, Func<TContext, Task<IResponse>> pipeline, CancellationToken stoppingToken)
-    public async Task HandleClientAsync(Stream stream, CancellationToken stoppingToken)
+    public async Task HandleClientAsync2(Stream stream, Func<TContext, Task> pipeline ,CancellationToken stoppingToken)
+    {
+        // Create a new context for this client connection
+        var context = new TContext
+        {
+            Stream = stream,
+        };
+
+        var pipeReader = PipeReader.Create(stream,
+            new StreamPipeReaderOptions(MemoryPool<byte>.Shared, leaveOpen: true, bufferSize: 65535));
+
+        // Read the initial client request headers
+        //var headers = await ExtractHeaders(pipeReader, stoppingToken);
+
+#if NET9_0_OR_GREATER
+
+        var headers = await ExtractHeadersAsync(pipeReader, stoppingToken);
+
+#else
+
+        var buffer = await pipeReader.ReadAsync(stoppingToken);
+        var headers = ExtractHeadersSync(buffer.Buffer, out var consumed);
+
+#endif
+
+
+        // Loop to handle multiple requests for "keep-alive" connections
+        while (headers != null)
+        {
+            // Determine the connection type based on headers
+            //var connection = GetConnectionType(headers);
+
+            var connection = headers.TryGetValue("Connection-Type", out var connectionValue)
+                ? GetConnectionType2(connectionValue)
+                : ConnectionType.Close;
+
+            // Handle WebSocket upgrade requests
+            if (connection == ConnectionType.Websocket)
+                await SendHandshakeResponse(context, ToRawHeaderString(headers));
+
+            // Split the headers into individual lines for processing
+            //var headerEntries = headers.Split("\r\n");
+
+            // Extract the URI and HTTP method from the request line
+
+            var uri = headers.TryGetValue(":Request-Line", out var requestLine)
+                ? TryExtractUri2(requestLine, out (string httpMethod, string uriParams) uriHeader)
+                : throw new InvalidOperationException("Invalid request received.");
+
+            /*var result = TryExtractUri2(headers, out (string, string) uriHeader);
+            if (!result)
+            {
+                Console.WriteLine("Invalid request received, unable to parse route");
+                throw new InvalidOperationException("Invalid request received, unable to parse route");
+            }*/
+
+            // Split the URI into route and query string parts
+            var uriParams = uriHeader.uriParams.Split('?');
+
+            // Check if the request is for a static file
+            if (UseResources & IsRouteFile(uriParams[0]))
+            {
+                // Serve the static file from embedded resources
+                await FlushResource(stream, uriParams);
+            }
+            else
+            {
+                // This is a dynamic request - extract the request body
+                //var body = await ExtractBody(pipeReader, headers, stoppingToken);
+                var body = new byte[] { 0x01 };
+
+                // Build the complete HTTP request object with all parsed components
+                context.Request = new Http11Request(
+                    Headers: headers,
+                    Body: body,
+                    Route: uriParams[0],
+                    QueryParameters: uriParams.Length > 1 ? uriParams[1] : string.Empty,
+                    HttpMethod: uriHeader.httpMethod);
+
+
+                await pipeline(context);
+
+                headers.Dispose();
+            }
+
+            // For keep-alive connections, try to read the next request
+            // Otherwise, exit the loop and close the connection
+            if (connection == ConnectionType.KeepAlive)
+            {
+                //headers = await ExtractHeaders(pipeReader, stoppingToken);
+
+#if NET9_0_OR_GREATER
+
+                headers = await ExtractHeadersAsync(pipeReader, stoppingToken);
+
+#else
+
+                buffer = await pipeReader.ReadAsync(stoppingToken);
+                headers = ExtractHeadersSync(buffer.Buffer, out var consumedAgain);
+                consumed = consumedAgain;
+#endif
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+
+    public async Task HandleClientAsync(Stream stream, Func<TContext, Task> pipeline, CancellationToken stoppingToken)
     {
         // Create a new context for this client connection
         var context = new TContext
@@ -159,7 +279,7 @@ public partial class WebHostHttp11<TContext>(WebHostApp<TContext> app, IHandlerA
             var headerEntries = headers.Split("\r\n");
 
             // Extract the URI and HTTP method from the request line
-            var result = TryExtractUri2(headerEntries[0], out (string, string) uriHeader);
+            var result = TryExtractUri2(headerEntries[0], out (string httpMethod, string uriParams) uriHeader);
             if (!result)
             {
                 Console.WriteLine("Invalid request received, unable to parse route");
@@ -167,7 +287,7 @@ public partial class WebHostHttp11<TContext>(WebHostApp<TContext> app, IHandlerA
             }
 
             // Split the URI into route and query string parts
-            var uriParams = uriHeader.Item2.Split('?');
+            var uriParams = uriHeader.uriParams.Split('?');
 
             // Check if the request is for a static file
             if (UseResources & IsRouteFile(uriParams[0]))
@@ -178,27 +298,19 @@ public partial class WebHostHttp11<TContext>(WebHostApp<TContext> app, IHandlerA
             else
             {
                 // This is a dynamic request - extract the request body
+                //var body = await ExtractBody(pipeReader, headers, stoppingToken);
                 var body = await ExtractBody(pipeReader, headers, stoppingToken);
 
                 // Build the complete HTTP request object with all parsed components
                 context.Request = new Http11Request(
-                    Headers: headerEntries,
+                    Headers: null!,
                     Body: body,
                     Route: uriParams[0],
                     QueryParameters: uriParams.Length > 1 ? uriParams[1] : string.Empty,
-                    HttpMethod: uriHeader.Item1);
+                    HttpMethod: uriHeader.httpMethod);
 
 
-                if (args.UseResponse)
-                {
-                    // Execute the middleware pipeline and respond to the client
-                    await PipelineAndRespond(context);
-                }
-                else
-                {
-                    // In case the response is handled by the user
-                    await PipelineNoResponse(context);
-                }
+                await pipeline(context);
             }
 
             // For keep-alive connections, try to read the next request
@@ -214,128 +326,26 @@ public partial class WebHostHttp11<TContext>(WebHostApp<TContext> app, IHandlerA
         }
     }
 
-    public async Task PipelineAndRespond(TContext context)
+    private static string ToRawHeaderString(PooledDictionary<string, string> headers)
     {
-        var response = await Pipeline(context);
+        // Estimate capacity: 32 headers × 40 chars average
+        var builder = new StringBuilder(2048);
 
-        response.Dispose();
-    }
-}
-
-public sealed partial class WebHostHttp11<TContext>
-{
-    /// <summary>
-    /// Recursively executes the registered middleware by order of registration and invokes the final endpoint.
-    /// </summary>
-    /// <param name="context">The current HTTP request context, representing the state of the incoming request.</param>
-    /// <param name="index">The current index in the middleware pipeline to start executing from.</param>
-    /// <param name="middleware">A list of middleware components to be executed in order.</param>
-    /// <returns>A task representing the asynchronous operation that processes the pipeline and returns a response.</returns>
-    /// <exception cref="InvalidOperationException">Thrown if no endpoint is found for the decoded route.</exception>
-    public Task<IResponse> Pipeline(
-        TContext context,
-        int index,
-        IList<Func<TContext, Func<TContext, Task<IResponse>>, Task<IResponse>>> middleware)
-    {
-        if (index < middleware.Count)
+        // Write request line first
+        if (headers.TryGetValue(":Request-Line", out var requestLine))
         {
-            return middleware[index](context, async (ctx) => await Pipeline(ctx, index + 1, middleware));
+            builder.Append(requestLine).Append("\r\n");
         }
 
-        var decodedRoute = MatchEndpoint(app.EncodedRoutes[context.Request.HttpMethod.ToUpper()], context.Request.Route);
-
-        var endpoint = context.Scope.ServiceProvider
-            .GetRequiredKeyedService<Func<TContext, Task<IResponse>>>(
-                $"{context.Request.HttpMethod}_{decodedRoute}");
-
-        return endpoint.Invoke(context);
-    }
-
-    /// <summary>
-    /// Executes the registered middleware pipeline and returns a response by invoking the final endpoint.
-    /// </summary>
-    /// <param name="context">The current HTTP request context, representing the state of the incoming request.</param>
-    /// <returns>A task representing the asynchronous operation that processes the pipeline and returns a response.</returns>
-    public async Task<IResponse> Pipeline(TContext context)
-    {
-        var middleware = app.InternalHost.Services
-            .GetServices<Func<TContext, Func<TContext, Task<IResponse>>, Task<IResponse>>>()
-            .ToList();
-
-        await using var scope = app.InternalHost.Services.CreateAsyncScope();
-        context.Scope = scope;
-
-        return await Pipeline(context, 0, middleware);
-    }
-
-    /// <summary>
-    /// Executes the registered middleware pipeline without expecting a response. Invokes the endpoint without returning a response.
-    /// </summary>
-    /// <param name="context">The current HTTP request context, representing the state of the incoming request.</param>
-    /// <param name="index">The current index in the middleware pipeline to start executing from.</param>
-    /// <param name="middleware">A list of middleware components to be executed in order.</param>
-    /// <returns>A task representing the asynchronous operation that processes the middleware pipeline without returning a response.</returns>
-    /// <exception cref="InvalidOperationException">Thrown if no endpoint is found for the decoded route.</exception>
-    public Task PipelineNoResponse(TContext context, int index, IList<Func<TContext, Func<TContext, Task>, Task>> middleware)
-    {
-        if (index < middleware.Count)
+        foreach (var (key, value) in headers)
         {
-            return middleware[index](context, async (ctx) => await PipelineNoResponse(ctx, index + 1, middleware));
+            if (key == ":Request-Line") continue;
+            builder.Append(key).Append(": ").Append(value).Append("\r\n");
         }
 
-        var decodedRoute = MatchEndpoint(app.EncodedRoutes[context.Request.HttpMethod.ToUpper()], context.Request.Route);
+        // Terminate header block
+        builder.Append("\r\n");
 
-        var endpoint = context.Scope.ServiceProvider
-            .GetRequiredKeyedService<Func<TContext, Task>>($"{context.Request.HttpMethod}_{decodedRoute}");
-
-        return endpoint is null
-            ? throw new InvalidOperationException("Unable to find the Invoke method on the resolved service.")
-            : endpoint.Invoke(context);
-    }
-
-    /// <summary>
-    /// Executes the registered middleware pipeline without expecting a response. Invokes the endpoint and completes the operation asynchronously.
-    /// </summary>
-    /// <param name="context">The current HTTP request context, representing the state of the incoming request.</param>
-    /// <returns>A task representing the asynchronous operation that processes the middleware pipeline without returning a response.</returns>
-    public async Task PipelineNoResponse(TContext context)
-    {
-        var middleware = app.InternalHost.Services.GetServices<Func<TContext, Func<TContext, Task>, Task>>().ToList();
-
-        await using var scope = app.InternalHost.Services.CreateAsyncScope();
-        context.Scope = scope;
-
-        await PipelineNoResponse(context, 0, middleware);
-    }
-
-    /// <summary>
-    /// Matches a given input string against a set of encoded route patterns.
-    /// </summary>
-    /// <param name="hashSet">A <see cref="HashSet{T}"/> containing route patterns to match against.</param>
-    /// <param name="input">The input string (route) to match against the patterns.</param>
-    /// <returns>The first matching route pattern from the <paramref name="hashSet"/>, or <c>null</c> if no match is found.</returns>
-    public static string? MatchEndpoint(HashSet<string> hashSet, string input)
-    {
-        return (from entry in hashSet
-                let pattern = ConvertToRegex(entry) // Convert route pattern to regex
-                where Regex.IsMatch(input, pattern) // Check if input matches the regex
-                select entry) // Select the matching pattern
-            .FirstOrDefault(); // Return the first match or null if no match is found
-    }
-
-    /// <summary>
-    /// Converts a route pattern with placeholders (e.g., ":id") into a regular expression.
-    /// </summary>
-    /// <param name="pattern">The route pattern to convert into a regex format.</param>
-    /// <returns>A regex string that matches the given pattern.</returns>
-    public static string ConvertToRegex(string pattern)
-    {
-        // Replace placeholders like ":id" with a regex pattern that matches any non-slash characters
-        var regexPattern = Regex.Replace(pattern, @":\w+", "[^/]+");
-
-        // Add anchors to ensure the regex matches the entire input string
-        regexPattern = $"^{regexPattern}$";
-
-        return regexPattern;
+        return builder.ToString();
     }
 }

@@ -2,7 +2,6 @@
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
-using System.Text;
 using System.Security;
 
 namespace WebHost;
@@ -23,7 +22,7 @@ public sealed partial class WebHostApp<TContext>
     private async Task HandlePlainClientAsync(Socket client, CancellationToken stoppingToken)
     {
         var stream = new NetworkStream(client);
-        await HttpHandler.HandleClientAsync(stream, stoppingToken);
+        await HttpHandler.HandleClientAsync(stream, PipelineNoResponse, stoppingToken);
     }
 
     /// <summary>
@@ -74,6 +73,7 @@ public sealed partial class WebHostApp<TContext>
         //
         await HttpHandler.HandleClientAsync(
             sslStream,
+            PipelineNoResponse,
             stoppingToken);
     }
 
@@ -98,20 +98,6 @@ public sealed partial class WebHostApp<TContext>
         }
 
         return true; // Ensure the exception is always caught
-    }
-
-    /// <summary>
-    /// Decodes a buffer of received bytes into a UTF-8 string.
-    /// </summary>
-    /// <param name="buffer">A <see cref="ReadOnlyMemory{T}"/> containing the data to decode.</param>
-    /// <returns>The decoded request as a UTF-8 string.</returns>
-    /// <remarks>
-    /// - Uses the <see cref="Encoding.UTF8"/> class to decode the buffer.
-    /// - Ensures the original memory buffer is not modified by working with <see cref="ReadOnlyMemory{T}"/>.
-    /// </remarks>
-    private static string DecodeRequest(ReadOnlySpan<byte> buffer)
-    {
-        return Encoding.UTF8.GetString(buffer);
     }
 
     /// <summary>

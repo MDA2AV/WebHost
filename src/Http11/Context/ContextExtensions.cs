@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using WebHost.Http11.Websockets;
+using WebHost.Protocol;
 
 namespace WebHost.Http11.Context;
 

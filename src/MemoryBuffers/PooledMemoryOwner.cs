@@ -1,6 +1,6 @@
 ﻿using System.Buffers;
 
-namespace WebHost.Http11.Websockets;
+namespace WebHost.MemoryBuffers;
 
 /// <summary>
 /// A custom implementation of <see cref="IMemoryOwner{T}"/> that uses an <see cref="ArrayPool{T}"/> 

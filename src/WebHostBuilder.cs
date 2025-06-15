@@ -4,8 +4,8 @@ using System.Net.Security;
 using System.Net;
 using System.Reflection;
 using WebHost.Attributes;
-using WebHost.Http11;
-using WebHost.Http11.Context;
+using WebHost.Protocol;
+using WebHost.Protocol.Response;
 
 namespace WebHost;
 
@@ -25,9 +25,9 @@ public sealed class WebHostBuilder<THandler, TContext>
     /// Initializes a new instance using the specified handler factory.
     /// </summary>
     /// <param name="handlerFactory">Factory that creates an instance of <typeparamref name="THandler"/>.</param>
-    public WebHostBuilder(Func<WebHostApp<TContext>, THandler> handlerFactory)
+    public WebHostBuilder(Func<THandler> handlerFactory)
     {
-        App.HttpHandler = handlerFactory(App);
+        App.HttpHandler = handlerFactory();
         App.SslServerAuthenticationOptions.ApplicationProtocols = [SslApplicationProtocol.Http11];
     }
 
@@ -36,9 +36,9 @@ public sealed class WebHostBuilder<THandler, TContext>
     /// </summary>
     /// <param name="handlerFactory">Factory that creates an instance of <typeparamref name="THandler"/>.</param>
     /// <param name="sslApplicationProtocols">A list of supported TLS ALPN protocols.</param>
-    public WebHostBuilder(Func<WebHostApp<TContext>, THandler> handlerFactory, List<SslApplicationProtocol> sslApplicationProtocols)
+    public WebHostBuilder(Func<THandler> handlerFactory, List<SslApplicationProtocol> sslApplicationProtocols)
     {
-        App.HttpHandler = handlerFactory(App);
+        App.HttpHandler = handlerFactory();
         App.SslServerAuthenticationOptions.ApplicationProtocols = sslApplicationProtocols;
     }
 
@@ -71,7 +71,7 @@ public sealed class WebHostBuilder<THandler, TContext>
     /// <summary>
     /// Sets the IP address and port to which the server will bind.
     /// </summary>
-    public WebHostBuilder<THandler, TContext> SetEndpoint(IPAddress ipAddress, int port)
+    public WebHostBuilder<THandler, TContext> Endpoint(IPAddress ipAddress, int port)
     {
         App.IpAddress = ipAddress;
         App.Port = port;
@@ -81,7 +81,7 @@ public sealed class WebHostBuilder<THandler, TContext>
     /// <summary>
     /// Sets the IP address (as a string) and port to which the server will bind.
     /// </summary>
-    public WebHostBuilder<THandler, TContext> SetEndpoint(string ipAddress, int port)
+    public WebHostBuilder<THandler, TContext> Endpoint(string ipAddress, int port)
     {
         App.IpAddress = IPAddress.Parse(ipAddress);
         App.Port = port;
@@ -91,7 +91,7 @@ public sealed class WebHostBuilder<THandler, TContext>
     /// <summary>
     /// Sets the port to which the server will bind.
     /// </summary>
-    public WebHostBuilder<THandler, TContext> SetPort(int port)
+    public WebHostBuilder<THandler, TContext> Port(int port)
     {
         App.Port = port;
         return this;
@@ -100,7 +100,7 @@ public sealed class WebHostBuilder<THandler, TContext>
     /// <summary>
     /// Sets the backlog size for pending TCP connections.
     /// </summary>
-    public WebHostBuilder<THandler, TContext> SetBacklog(int backlog)
+    public WebHostBuilder<THandler, TContext> Backlog(int backlog)
     {
         App.Backlog = backlog;
         return this;
@@ -143,14 +143,26 @@ public sealed class WebHostBuilder<THandler, TContext>
 
     /// <summary>
     /// Adds a middleware delegate to the processing pipeline.
+    /// This overload supports middleware that returns <see cref="Task"/> and does not produce a response directly.
     /// </summary>
-    /// <param name="func">A delegate factory that produces the middleware logic using DI services.</param>
+    /// <param name="func">
+    /// A factory delegate that resolves a middleware delegate using DI.
+    /// The middleware delegate accepts a <typeparamref name="TContext"/> and a next delegate representing the remaining pipeline.
+    /// </param>
     public WebHostBuilder<THandler, TContext> UseMiddleware(Func<IServiceProvider, Func<TContext, Func<TContext, Task>, Task>> func)
     {
         App.HostBuilder.ConfigureServices((_, services) =>
             services.AddScoped<Func<TContext, Func<TContext, Task>, Task>>(func));
         return this;
     }
+    /// <summary>
+    /// Adds a middleware delegate to the processing pipeline.
+    /// This overload supports middleware that returns <see cref="Task{IResponse}"/>.
+    /// </summary>
+    /// <param name="func">
+    /// A factory delegate that resolves a middleware delegate using DI.
+    /// The middleware delegate accepts a <typeparamref name="TContext"/> and a next delegate representing the remaining pipeline.
+    /// </param>
     public WebHostBuilder<THandler, TContext> UseMiddleware(Func<IServiceProvider, Func<TContext, Func<TContext, Task<IResponse>>, Task<IResponse>>> func)
     {
         App.HostBuilder.ConfigureServices((_, services) =>
@@ -159,8 +171,10 @@ public sealed class WebHostBuilder<THandler, TContext>
     }
 
     /// <summary>
-    /// Registers a route delegate for processing HTTP GET requests.
+    /// Registers a delegate for processing HTTP GET requests asynchronously.
     /// </summary>
+    /// <param name="route">The route template (e.g., "/users").</param>
+    /// <param name="func">A factory delegate that resolves a request handler using DI.</param>
     public WebHostBuilder<THandler, TContext> MapGet(string route, Func<IServiceProvider, Func<TContext, Task>> func)
     {
         App.EncodedRoutes[HttpConstants.Get].Add(route);
@@ -168,17 +182,36 @@ public sealed class WebHostBuilder<THandler, TContext>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Get}_{route}", (sp, key) => func(sp)));
         return this;
     }
-    public WebHostBuilder<THandler, TContext> MapGet(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    /// <summary>
+    /// Registers a synchronous delegate for processing HTTP GET requests.
+    /// The handler will be wrapped in a <see cref="Task"/> for compatibility with the async pipeline.
+    /// </summary>
+    /// <param name="route">The route template (e.g., "/users").</param>
+    /// <param name="func">A factory delegate that resolves a synchronous request handler using DI.</param>
+    public WebHostBuilder<THandler, TContext> MapGet(string route, Func<IServiceProvider, Action<TContext>> func)
     {
         App.EncodedRoutes[HttpConstants.Get].Add(route);
+
+        Func<TContext, Task> AsyncFunc(IServiceProvider sp)
+        {
+            Action<TContext> action = func(sp);
+            return context =>
+            {
+                action(context);
+                return Task.CompletedTask;
+            };
+        }
+
         App.HostBuilder.ConfigureServices((_, services) =>
-            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Get}_{route}", (sp, key) => func(sp)));
+            services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Get}_{route}", (sp, key) => AsyncFunc(sp)));
         return this;
     }
 
     /// <summary>
-    /// Registers a route delegate for processing HTTP POST requests.
+    /// Registers a delegate for processing HTTP GET requests asynchronously.
     /// </summary>
+    /// <param name="route">The route template (e.g., "/resource").</param>
+    /// <param name="func">A factory delegate that resolves a request handler using DI.</param>
     public WebHostBuilder<THandler, TContext> MapPost(string route, Func<IServiceProvider, Func<TContext, Task>> func)
     {
         App.EncodedRoutes[HttpConstants.Post].Add(route);
@@ -186,18 +219,36 @@ public sealed class WebHostBuilder<THandler, TContext>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Post}_{route}", (sp, key) => func(sp)));
         return this;
     }
-
-    public WebHostBuilder<THandler, TContext> MapPost(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    /// <summary>
+    /// Registers a synchronous delegate for processing HTTP GET requests.
+    /// The handler will be wrapped in a <see cref="Task"/> for compatibility with the async pipeline.
+    /// </summary>
+    /// <param name="route">The route template (e.g., "/resource").</param>
+    /// <param name="func">A factory delegate that resolves a synchronous request handler using DI.</param>
+    public WebHostBuilder<THandler, TContext> MapPost(string route, Func<IServiceProvider, Action<TContext>> func)
     {
-        App.EncodedRoutes[HttpConstants.Post].Add(route);
+        App.EncodedRoutes[HttpConstants.Get].Add(route);
+
+        Func<TContext, Task> AsyncFunc(IServiceProvider sp)
+        {
+            Action<TContext> action = func(sp);
+            return context =>
+            {
+                action(context);
+                return Task.CompletedTask;
+            };
+        }
+
         App.HostBuilder.ConfigureServices((_, services) =>
-            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Post}_{route}", (sp, key) => func(sp)));
+            services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Post}_{route}", (sp, key) => AsyncFunc(sp)));
         return this;
     }
 
     /// <summary>
-    /// Registers a route delegate for processing HTTP PUT requests.
+    /// Registers a delegate for processing HTTP PUT requests asynchronously.
     /// </summary>
+    /// <param name="route">The route template (e.g., "/resource").</param>
+    /// <param name="func">A factory delegate that resolves a request handler using DI.</param>
     public WebHostBuilder<THandler, TContext> MapPut(string route, Func<IServiceProvider, Func<TContext, Task>> func)
     {
         App.EncodedRoutes[HttpConstants.Put].Add(route);
@@ -205,17 +256,36 @@ public sealed class WebHostBuilder<THandler, TContext>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Put}_{route}", (sp, key) => func(sp)));
         return this;
     }
-    public WebHostBuilder<THandler, TContext> MapPut(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    /// <summary>
+    /// Registers a synchronous delegate for processing HTTP PUT requests.
+    /// The handler will be wrapped in a <see cref="Task"/> for compatibility with the async pipeline.
+    /// </summary>
+    /// <param name="route">The route template (e.g., "/resource").</param>
+    /// <param name="func">A factory delegate that resolves a synchronous request handler using DI.</param>
+    public WebHostBuilder<THandler, TContext> MapPut(string route, Func<IServiceProvider, Action<TContext>> func)
     {
-        App.EncodedRoutes[HttpConstants.Put].Add(route);
+        App.EncodedRoutes[HttpConstants.Get].Add(route);
+
+        Func<TContext, Task> AsyncFunc(IServiceProvider sp)
+        {
+            Action<TContext> action = func(sp);
+            return context =>
+            {
+                action(context);
+                return Task.CompletedTask;
+            };
+        }
+
         App.HostBuilder.ConfigureServices((_, services) =>
-            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Put}_{route}", (sp, key) => func(sp)));
+            services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Put}_{route}", (sp, key) => AsyncFunc(sp)));
         return this;
     }
 
     /// <summary>
-    /// Registers a route delegate for processing HTTP DELETE requests.
+    /// Registers a delegate for processing HTTP DELETE requests asynchronously.
     /// </summary>
+    /// <param name="route">The route template (e.g., "/resource").</param>
+    /// <param name="func">A factory delegate that resolves a request handler using DI.</param>
     public WebHostBuilder<THandler, TContext> MapDelete(string route, Func<IServiceProvider, Func<TContext, Task>> func)
     {
         App.EncodedRoutes[HttpConstants.Delete].Add(route);
@@ -223,17 +293,36 @@ public sealed class WebHostBuilder<THandler, TContext>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Delete}_{route}", (sp, key) => func(sp)));
         return this;
     }
-    public WebHostBuilder<THandler, TContext> MapDelete(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    /// <summary>
+    /// Registers a synchronous delegate for processing HTTP DELETE requests.
+    /// The handler will be wrapped in a <see cref="Task"/> for compatibility with the async pipeline.
+    /// </summary>
+    /// <param name="route">The route template (e.g., "/resource").</param>
+    /// <param name="func">A factory delegate that resolves a synchronous request handler using DI.</param>
+    public WebHostBuilder<THandler, TContext> MapDelete(string route, Func<IServiceProvider, Action<TContext>> func)
     {
-        App.EncodedRoutes[HttpConstants.Delete].Add(route);
+        App.EncodedRoutes[HttpConstants.Get].Add(route);
+
+        Func<TContext, Task> AsyncFunc(IServiceProvider sp)
+        {
+            Action<TContext> action = func(sp);
+            return context =>
+            {
+                action(context);
+                return Task.CompletedTask;
+            };
+        }
+
         App.HostBuilder.ConfigureServices((_, services) =>
-            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Delete}_{route}", (sp, key) => func(sp)));
+            services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Delete}_{route}", (sp, key) => AsyncFunc(sp)));
         return this;
     }
 
     /// <summary>
-    /// Registers a route delegate for processing HTTP PATCH requests.
+    /// Registers a delegate for processing HTTP PATCH requests asynchronously.
     /// </summary>
+    /// <param name="route">The route template (e.g., "/resource").</param>
+    /// <param name="func">A factory delegate that resolves a request handler using DI.</param>
     public WebHostBuilder<THandler, TContext> MapPatch(string route, Func<IServiceProvider, Func<TContext, Task>> func)
     {
         App.EncodedRoutes[HttpConstants.Patch].Add(route);
@@ -241,17 +330,36 @@ public sealed class WebHostBuilder<THandler, TContext>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Patch}_{route}", (sp, key) => func(sp)));
         return this;
     }
-    public WebHostBuilder<THandler, TContext> MapPatch(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    /// <summary>
+    /// Registers a synchronous delegate for processing HTTP PATCH requests.
+    /// The handler will be wrapped in a <see cref="Task"/> for compatibility with the async pipeline.
+    /// </summary>
+    /// <param name="route">The route template (e.g., "/resource").</param>
+    /// <param name="func">A factory delegate that resolves a synchronous request handler using DI.</param>
+    public WebHostBuilder<THandler, TContext> MapPatch(string route, Func<IServiceProvider, Action<TContext>> func)
     {
-        App.EncodedRoutes[HttpConstants.Patch].Add(route);
+        App.EncodedRoutes[HttpConstants.Get].Add(route);
+
+        Func<TContext, Task> AsyncFunc(IServiceProvider sp)
+        {
+            Action<TContext> action = func(sp);
+            return context =>
+            {
+                action(context);
+                return Task.CompletedTask;
+            };
+        }
+
         App.HostBuilder.ConfigureServices((_, services) =>
-            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Patch}_{route}", (sp, key) => func(sp)));
+            services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Patch}_{route}", (sp, key) => AsyncFunc(sp)));
         return this;
     }
 
     /// <summary>
-    /// Registers a route delegate for processing HTTP HEAD requests.
+    /// Registers a delegate for processing HTTP HEAD requests asynchronously.
     /// </summary>
+    /// <param name="route">The route template (e.g., "/resource").</param>
+    /// <param name="func">A factory delegate that resolves a request handler using DI.</param>
     public WebHostBuilder<THandler, TContext> MapHead(string route, Func<IServiceProvider, Func<TContext, Task>> func)
     {
         App.EncodedRoutes[HttpConstants.Head].Add(route);
@@ -259,17 +367,36 @@ public sealed class WebHostBuilder<THandler, TContext>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Head}_{route}", (sp, key) => func(sp)));
         return this;
     }
-    public WebHostBuilder<THandler, TContext> MapHead(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    /// <summary>
+    /// Registers a synchronous delegate for processing HTTP HEAD requests.
+    /// The handler will be wrapped in a <see cref="Task"/> for compatibility with the async pipeline.
+    /// </summary>
+    /// <param name="route">The route template (e.g., "/resource").</param>
+    /// <param name="func">A factory delegate that resolves a synchronous request handler using DI.</param>
+    public WebHostBuilder<THandler, TContext> MapHead(string route, Func<IServiceProvider, Action<TContext>> func)
     {
-        App.EncodedRoutes[HttpConstants.Head].Add(route);
+        App.EncodedRoutes[HttpConstants.Get].Add(route);
+
+        Func<TContext, Task> AsyncFunc(IServiceProvider sp)
+        {
+            Action<TContext> action = func(sp);
+            return context =>
+            {
+                action(context);
+                return Task.CompletedTask;
+            };
+        }
+
         App.HostBuilder.ConfigureServices((_, services) =>
-            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Head}_{route}", (sp, key) => func(sp)));
+            services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Head}_{route}", (sp, key) => AsyncFunc(sp)));
         return this;
     }
 
     /// <summary>
-    /// Registers a route delegate for processing HTTP OPTIONS requests.
+    /// Registers a delegate for processing HTTP OPTIONS requests asynchronously.
     /// </summary>
+    /// <param name="route">The route template (e.g., "/resource").</param>
+    /// <param name="func">A factory delegate that resolves a request handler using DI.</param>
     public WebHostBuilder<THandler, TContext> MapOptions(string route, Func<IServiceProvider, Func<TContext, Task>> func)
     {
         App.EncodedRoutes[HttpConstants.Options].Add(route);
@@ -277,11 +404,28 @@ public sealed class WebHostBuilder<THandler, TContext>
             services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Options}_{route}", (sp, key) => func(sp)));
         return this;
     }
-    public WebHostBuilder<THandler, TContext> MapOptions(string route, Func<IServiceProvider, Func<TContext, Task<IResponse>>> func)
+    /// <summary>
+    /// Registers a synchronous delegate for processing HTTP OPTIONS requests.
+    /// The handler will be wrapped in a <see cref="Task"/> for compatibility with the async pipeline.
+    /// </summary>
+    /// <param name="route">The route template (e.g., "/resource").</param>
+    /// <param name="func">A factory delegate that resolves a synchronous request handler using DI.</param>
+    public WebHostBuilder<THandler, TContext> MapOptions(string route, Func<IServiceProvider, Action<TContext>> func)
     {
-        App.EncodedRoutes[HttpConstants.Options].Add(route);
+        App.EncodedRoutes[HttpConstants.Get].Add(route);
+
+        Func<TContext, Task> AsyncFunc(IServiceProvider sp)
+        {
+            Action<TContext> action = func(sp);
+            return context =>
+            {
+                action(context);
+                return Task.CompletedTask;
+            };
+        }
+
         App.HostBuilder.ConfigureServices((_, services) =>
-            services.AddKeyedScoped<Func<TContext, Task<IResponse>>>($"{HttpConstants.Options}_{route}", (sp, key) => func(sp)));
+            services.AddKeyedScoped<Func<TContext, Task>>($"{HttpConstants.Options}_{route}", (sp, key) => AsyncFunc(sp)));
         return this;
     }
 }

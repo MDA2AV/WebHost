@@ -10,7 +10,6 @@ public sealed partial class WebHostHttp11<TContext>
     public string ResourcesPath { get; } = args.ResourcesPath;
     public Assembly ResourcesAssembly { get; } = args.ResourcesAssembly;
 
-
     private static readonly ArrayPool<byte> BufferPool = ArrayPool<byte>.Shared;
 
     /// <exception cref="ArgumentException"/>

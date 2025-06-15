@@ -1,4 +1,6 @@
-﻿namespace WebHost;
+﻿using WebHost.MemoryBuffers;
+
+namespace WebHost;
 
 /// <summary>
 /// Represents a minimal abstraction of an HTTP request containing essential routing information.
@@ -31,5 +33,5 @@ public interface IHttpRequest
     /// <summary>
     /// Gets the collection of HTTP request headers as raw strings, typically in the format "HeaderName: HeaderValue".
     /// </summary>
-    IEnumerable<string> Headers { get; init; }
+    PooledDictionary<string, string> Headers { get; init; }
 }

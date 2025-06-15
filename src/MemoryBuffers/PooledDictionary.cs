@@ -1,8 +1,7 @@
 ﻿using System.Buffers;
 using System.Collections;
-using System.Collections.Generic;
 
-namespace WebHost;
+namespace WebHost.MemoryBuffers;
 
 /// <summary>
 /// Represents a high-performance, pooled dictionary that minimizes allocations by renting internal arrays from <see cref="ArrayPool{T}"/>.
@@ -19,8 +18,8 @@ public class PooledDictionary<TKey, TValue> :
     private const int DefaultCapacity = 8;
     private const int MaxCapacity = 1024;
 
-    private static readonly ArrayPool<TKey> _keyPool = ArrayPool<TKey>.Shared;
-    private static readonly ArrayPool<TValue> _valuePool = ArrayPool<TValue>.Shared;
+    private static readonly ArrayPool<TKey> KeyPool = ArrayPool<TKey>.Shared;
+    private static readonly ArrayPool<TValue> ValuePool = ArrayPool<TValue>.Shared;
 
     private TKey[]? _keys;
     private TValue[]? _values;
@@ -36,30 +35,41 @@ public class PooledDictionary<TKey, TValue> :
     /// <param name="comparer">An optional custom equality comparer for keys.</param>
     public PooledDictionary(int capacity = DefaultCapacity, IEqualityComparer<TKey>? comparer = null)
     {
-        _keys = _keyPool.Rent(capacity);
-        _values = _valuePool.Rent(capacity);
+        _keys = KeyPool.Rent(capacity);
+        _values = ValuePool.Rent(capacity);
         _comparer = comparer ?? EqualityComparer<TKey>.Default;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets the number of key-value pairs contained in the dictionary.
+    /// </summary>
     public int Count => _count;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets a value indicating whether the dictionary is read-only.
+    /// Always returns false.
+    /// </summary>
     public bool IsReadOnly => false;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets a collection containing the keys in the dictionary.
+    /// </summary>
     public ICollection<TKey> Keys => GetKeys();
 
-    /// <inheritdoc />
     IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => GetKeys();
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets a collection containing the values in the dictionary.
+    /// </summary>
     public ICollection<TValue> Values => GetValues();
 
-    /// <inheritdoc />
     IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => GetValues();
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets or sets the value associated with the specified key.
+    /// </summary>
+    /// <param name="key">The key whose value to get or set.</param>
+    /// <returns>The value associated with the specified key.</returns>
     public TValue this[TKey key]
     {
         get
@@ -92,7 +102,9 @@ public class PooledDictionary<TKey, TValue> :
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Adds the specified key and value to the dictionary.
+    /// </summary>
     public void Add(TKey key, TValue value)
     {
         EnsureNotDisposed();
@@ -106,11 +118,15 @@ public class PooledDictionary<TKey, TValue> :
         _count++;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Adds the specified key-value pair to the dictionary.
+    /// </summary>
     public void Add(KeyValuePair<TKey, TValue> item)
         => Add(item.Key, item.Value);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the dictionary contains the specified key.
+    /// </summary>
     public bool ContainsKey(TKey key)
     {
         EnsureNotDisposed();
@@ -124,7 +140,9 @@ public class PooledDictionary<TKey, TValue> :
         return false;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the dictionary contains a specific key-value pair.
+    /// </summary>
     public bool Contains(KeyValuePair<TKey, TValue> item)
     {
         EnsureNotDisposed();
@@ -139,7 +157,9 @@ public class PooledDictionary<TKey, TValue> :
         return false;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Attempts to get the value associated with the specified key.
+    /// </summary>
     public bool TryGetValue(TKey key, out TValue value)
     {
         EnsureNotDisposed();
@@ -157,14 +177,18 @@ public class PooledDictionary<TKey, TValue> :
         return false;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Removes all keys and values from the dictionary.
+    /// </summary>
     public void Clear()
     {
         EnsureNotDisposed();
         _count = 0;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Copies the elements of the dictionary to an array, starting at a particular index.
+    /// </summary>
     public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
     {
         EnsureNotDisposed();
@@ -180,7 +204,9 @@ public class PooledDictionary<TKey, TValue> :
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Removes the value with the specified key from the dictionary.
+    /// </summary>
     public bool Remove(TKey key)
     {
         EnsureNotDisposed();
@@ -197,7 +223,9 @@ public class PooledDictionary<TKey, TValue> :
         return false;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Removes the specified key-value pair from the dictionary.
+    /// </summary>
     public bool Remove(KeyValuePair<TKey, TValue> item)
     {
         EnsureNotDisposed();
@@ -215,6 +243,44 @@ public class PooledDictionary<TKey, TValue> :
         return false;
     }
 
+    /// <summary>
+    /// Returns an enumerator that iterates through the dictionary.
+    /// </summary>
+    public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
+    {
+        EnsureNotDisposed();
+
+        for (int i = 0; i < _count; i++)
+        {
+            yield return new KeyValuePair<TKey, TValue>(_keys![i], _values![i]);
+        }
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    /// <summary>
+    /// Releases the rented arrays and clears the dictionary.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        if (_keys != null)
+        {
+            KeyPool.Return(_keys, clearArray: true);
+            _keys = null!;
+        }
+
+        if (_values != null)
+        {
+            ValuePool.Return(_values, clearArray: true);
+            _values = null!;
+        }
+
+        _count = 0;
+    }
+
     private void RemoveAt(int index)
     {
         if (index < _count - 1)
@@ -228,40 +294,6 @@ public class PooledDictionary<TKey, TValue> :
         _values![_count] = default!;
     }
 
-    /// <inheritdoc />
-    public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
-    {
-        EnsureNotDisposed();
-
-        for (int i = 0; i < _count; i++)
-        {
-            yield return new KeyValuePair<TKey, TValue>(_keys![i], _values![i]);
-        }
-    }
-
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-
-        if (_keys != null)
-        {
-            _keyPool.Return(_keys, clearArray: true);
-            _keys = null!;
-        }
-
-        if (_values != null)
-        {
-            _valuePool.Return(_values, clearArray: true);
-            _values = null!;
-        }
-
-        _count = 0;
-    }
-
     private void EnsureCapacity()
     {
         if (_count < _keys!.Length)
@@ -269,14 +301,14 @@ public class PooledDictionary<TKey, TValue> :
 
         int newSize = Math.Min(_keys.Length * 2, MaxCapacity);
 
-        var newKeys = _keyPool.Rent(newSize);
-        var newValues = _valuePool.Rent(newSize);
+        var newKeys = KeyPool.Rent(newSize);
+        var newValues = ValuePool.Rent(newSize);
 
         Array.Copy(_keys, newKeys, _count);
         Array.Copy(_values, newValues, _count);
 
-        _keyPool.Return(_keys, clearArray: true);
-        _valuePool.Return(_values, clearArray: true);
+        KeyPool.Return(_keys, clearArray: true);
+        ValuePool.Return(_values, clearArray: true);
 
         _keys = newKeys;
         _values = newValues;

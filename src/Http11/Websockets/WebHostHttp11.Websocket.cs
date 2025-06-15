@@ -1,6 +1,7 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 using WebHost.Http11.Context;
+using WebHost.Protocol;
 
 namespace WebHost.Http11;
 

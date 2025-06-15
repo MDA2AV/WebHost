@@ -4,6 +4,7 @@ using System.Net.Security;
 using System.Security.Authentication;
 using WebHost.Http11;
 using WebHost.Http11.Context;
+using WebHost.Protocol;
 
 namespace WebHost;
 
@@ -37,13 +38,12 @@ public sealed class WebHostApp
     public static WebHostBuilder<WebHostHttp11<Http11Context>, Http11Context> CreateBuilder(
         List<SslApplicationProtocol> sslApplicationProtocols)
     {
-        return new WebHostBuilder<WebHostHttp11<Http11Context>, Http11Context>((app) =>
-            new WebHostHttp11<Http11Context>(app,
+        return new WebHostBuilder<WebHostHttp11<Http11Context>, Http11Context>(() =>
+            new WebHostHttp11<Http11Context>(
                 new Http11HandlerArgs(
                     false,
                     null!,
-                    null!,
-                    true)), sslApplicationProtocols);
+                    null!)), sslApplicationProtocols);
     }
 
     /// <summary>
@@ -52,7 +52,7 @@ public sealed class WebHostApp
     /// <param name="handlerFactory">A function to create a new instance of <see cref="WebHostHttp11{Http11Context}"/>.</param>
     /// <returns>A new instance of <see cref="WebHostBuilder{WebHostHttp11, Http11Context}"/> configured with the provided handler factory and default SSL protocol.</returns>
     public static WebHostBuilder<WebHostHttp11<Http11Context>, Http11Context> CreateBuilder(
-        Func<WebHostApp<Http11Context>, WebHostHttp11<Http11Context>> handlerFactory)
+        Func< WebHostHttp11<Http11Context>> handlerFactory)
     {
         return CreateBuilder(handlerFactory, [SslApplicationProtocol.Http11]);
     }
@@ -64,7 +64,7 @@ public sealed class WebHostApp
     /// <param name="sslApplicationProtocols">A list of SSL application protocols to be used for the web host.</param>
     /// <returns>A new instance of <see cref="WebHostBuilder{WebHostHttp11, Http11Context}"/> configured with the provided handler factory and SSL application protocols.</returns>
     public static WebHostBuilder<WebHostHttp11<Http11Context>, Http11Context> CreateBuilder(
-        Func<WebHostApp<Http11Context>, WebHostHttp11<Http11Context>> handlerFactory,
+        Func<WebHostHttp11<Http11Context>> handlerFactory,
         List<SslApplicationProtocol> sslApplicationProtocols)
     {
         return new WebHostBuilder<WebHostHttp11<Http11Context>, Http11Context>(
@@ -79,7 +79,7 @@ public sealed class WebHostApp
     /// <typeparam name="TContext">The type of the context used by the handler.</typeparam>
     /// <param name="handlerFactory">A function to create a new instance of <see cref="THandler"/>.</param>
     /// <returns>A new instance of <see cref="WebHostBuilder{THandler, TContext}"/> configured with the provided handler factory and default SSL protocol.</returns>
-    public static WebHostBuilder<THandler, TContext> CreateBuilder<THandler, TContext>(Func<WebHostApp<TContext>, THandler> handlerFactory)
+    public static WebHostBuilder<THandler, TContext> CreateBuilder<THandler, TContext>(Func<THandler> handlerFactory)
         where THandler : IHttpHandler<TContext>
         where TContext : IContext
     {
@@ -95,7 +95,7 @@ public sealed class WebHostApp
     /// <param name="sslApplicationProtocols">A list of SSL application protocols to be used for the web host.</param>
     /// <returns>A new instance of <see cref="WebHostBuilder{THandler, TContext}"/> configured with the provided handler factory and SSL application protocols.</returns>
     public static WebHostBuilder<THandler, TContext> CreateBuilder<THandler, TContext>(
-        Func<WebHostApp<TContext>, THandler> handlerFactory,
+        Func<THandler> handlerFactory,
         List<SslApplicationProtocol> sslApplicationProtocols)
         where THandler : IHttpHandler<TContext>
         where TContext : IContext

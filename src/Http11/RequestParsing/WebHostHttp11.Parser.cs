@@ -2,6 +2,7 @@
 using System.IO.Pipelines;
 using System.Text;
 using System.Text.RegularExpressions;
+using WebHost.MemoryBuffers;
 
 namespace WebHost.Http11;
 
@@ -68,7 +69,6 @@ public sealed partial class WebHostHttp11<TContext>
     {
         if (header is null)
         {
-            System.Diagnostics.Debug.WriteLine("Headers is null");
             route = (null!, null!);
             return false;
         }
@@ -80,18 +80,16 @@ public sealed partial class WebHostHttp11<TContext>
         var match = Regex.Match(header, pattern);
         var result = match.Success;
 
-        if (result)
-        {
-            var method = match.Groups[1].Value; // Extract HTTP method
-            var path = match.Groups[2].Value;   // Extract URI including query parameters
+        if (!result)
+            return false;
 
-            route = (method, path);
+        var method = match.Groups[1].Value; // Extract HTTP method
+        var path = match.Groups[2].Value;   // Extract URI including query parameters
 
-            return true;
-        }
+        route = (method, path);
 
-        Console.WriteLine($"Endpoint was not found.");
-        return false;
+        return true;
+
     }
 
     /// <summary>
@@ -209,6 +207,145 @@ public sealed partial class WebHostHttp11<TContext>
             }
         }
     }
+
+
+    //TODO: Set a timeout?, if received request is malformed, this loop is stuck, maybe use the cancellation token source
+#if NET9_0_OR_GREATER
+
+    public static async Task<PooledDictionary<string, string>> ExtractHeadersAsync(PipeReader reader, CancellationToken stoppingToken)
+    {
+        while (true)
+        {
+            var result = await reader.ReadAsync(stoppingToken);
+            var buffer = result.Buffer;
+
+            if (TryAdvanceTo(new SequenceReader<byte>(buffer), "\r\n\r\n"u8, out var position))
+            {
+                var headerBytes = buffer.Slice(0, position);
+
+                // Decode directly into stack memory
+                var byteLength = (int)headerBytes.Length;
+                Span<byte> byteSpan = byteLength <= 1024 ? stackalloc byte[byteLength] : new byte[byteLength];
+                headerBytes.CopyTo(byteSpan);
+
+                int charCount = Encoding.UTF8.GetCharCount(byteSpan);
+                Span<char> charSpan = charCount <= 1024 ? stackalloc char[charCount] : new char[charCount];
+                Encoding.UTF8.GetChars(byteSpan, charSpan);
+
+                // Advance past the headers
+                reader.AdvanceTo(position);
+
+                // Parse headers
+                var headers = new PooledDictionary<string, string>(capacity: 16, comparer: StringComparer.OrdinalIgnoreCase);
+
+                int lineStart = 0;
+                bool isFirstLine = true;
+
+                while (true)
+                {
+                    int lineEnd = charSpan.Slice(lineStart).IndexOf("\r\n");
+
+                    if (lineEnd == -1)
+                        break;
+
+                    var line = charSpan.Slice(lineStart, lineEnd);
+                    lineStart += lineEnd + 2; // skip \r\n
+
+                    if (isFirstLine)
+                    {
+                        headers.Add(":Request-Line", new string(line));
+                        isFirstLine = false;
+                        continue;
+                    }
+
+                    int colonIndex = line.IndexOf(':');
+                    if (colonIndex == -1) continue;
+
+                    var key = line.Slice(0, colonIndex).Trim();
+                    var value = line.Slice(colonIndex + 1).Trim();
+
+                    headers.Add(new string(key), new string(value));
+                }
+
+                return headers;
+            }
+
+            reader.AdvanceTo(buffer.Start, buffer.End);
+
+            if (result.IsCompleted)
+                return null!;
+        }
+    }
+
+#else
+
+    public static PooledDictionary<string, string> ExtractHeadersSync(in ReadOnlySequence<byte> buffer, out SequencePosition consumed)
+    {
+        // Try to find header terminator (\r\n\r\n)
+        if (!TryAdvanceTo(new SequenceReader<byte>(buffer), "\r\n\r\n"u8, out var headerEnd))
+        {
+            consumed = buffer.Start;
+            return null!;
+        }
+
+        // Slice only the headers part
+        var headerBytes = buffer.Slice(0, headerEnd);
+        var byteLength = (int)headerBytes.Length;
+
+        byte[]? rentedBytes = null;
+        Span<byte> byteSpan = byteLength <= 1024
+            ? stackalloc byte[byteLength]
+            : (rentedBytes = ArrayPool<byte>.Shared.Rent(byteLength)).AsSpan(0, byteLength);
+
+        headerBytes.CopyTo(byteSpan);
+
+        int charCount = Encoding.UTF8.GetCharCount(byteSpan);
+        char[]? rentedChars = null;
+        Span<char> charSpan = charCount <= 1024
+            ? stackalloc char[charCount]
+            : (rentedChars = ArrayPool<char>.Shared.Rent(charCount)).AsSpan(0, charCount);
+
+        Encoding.UTF8.GetChars(byteSpan, charSpan);
+
+        var headers = new PooledDictionary<string, string>(capacity: 16, comparer: StringComparer.OrdinalIgnoreCase);
+
+        int lineStart = 0;
+        bool isFirstLine = true;
+
+        while (lineStart < charSpan.Length)
+        {
+            int lineEnd = charSpan.Slice(lineStart).IndexOf("\r\n");
+            if (lineEnd == -1) break;
+
+            var line = charSpan.Slice(lineStart, lineEnd);
+            lineStart += lineEnd + 2;
+
+            if (line.Length == 0) continue;
+
+            if (isFirstLine)
+            {
+                headers.Add(":Request-Line", new string(line));
+                isFirstLine = false;
+                continue;
+            }
+
+            int colonIndex = line.IndexOf(':');
+            if (colonIndex == -1) continue;
+
+            var key = line.Slice(0, colonIndex).Trim();
+            var value = line.Slice(colonIndex + 1).Trim();
+
+            headers.Add(new string(key), new string(value));
+        }
+
+        if (rentedBytes is not null) ArrayPool<byte>.Shared.Return(rentedBytes);
+        if (rentedChars is not null) ArrayPool<char>.Shared.Return(rentedChars);
+
+        consumed = headerEnd;
+        return headers;
+    }
+
+#endif
 
     /// <summary>
     /// Reads and extracts a chunk of data from a <see cref="PipeReader"/> stream,

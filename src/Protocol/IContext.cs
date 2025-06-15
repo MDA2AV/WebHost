@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using WebHost.Http11.Context;
+using WebHost.Protocol.Response;
 
-namespace WebHost;
+namespace WebHost.Protocol;
 
 /// <summary>
 /// Represents the context for a client connection, encapsulating the connection details, request, response, and dependency resolution.
@@ -38,4 +38,11 @@ public interface IContext
     /// - Passed to all asynchronous operations initiated within the context.
     /// </remarks>
     CancellationToken CancellationToken { get; set; }
+
+    /// <summary>
+    /// Gets or sets the HTTP response to be sent back to the client.
+    /// This property holds the response data, including status code, headers, and content.
+    /// It is constructed and written to the stream after the request has been processed.
+    /// </summary>
+    IResponse Response { get; set; }
 }

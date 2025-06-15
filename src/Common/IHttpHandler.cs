@@ -1,4 +1,4 @@
-﻿using WebHost.Http11.Context;
+﻿using WebHost.Protocol;
 
 namespace WebHost;
 
@@ -21,16 +21,8 @@ public interface IHttpHandler<out TContext>
     /// <returns>
     /// A <see cref="Task"/> that represents the asynchronous operation of handling the client session.
     /// </returns>
-    
-    /*
     Task HandleClientAsync(
         Stream stream,
         Func<TContext, Task> pipeline,
-        CancellationToken stoppingToken);
-    */
-
-    Task HandleClientAsync(
-        Stream stream,
-        //Func<TContext, Task<IResponse>> pipeline,
         CancellationToken stoppingToken);
 }
