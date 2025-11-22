@@ -1,5 +1,7 @@
 [![NuGet](https://img.shields.io/nuget/v/WebHost.svg)](https://www.nuget.org/packages/WebHost/)
 
+# Abandoned - Moved to Wired.IO project
+
 # WebHost
 
 WebHost is an ultra-lightweight web server framework for .NET, designed to handle HTTP, WebSocket, and secure TLS/mTLS communication. It provides a modular and extensible architecture, integrating seamlessly with .NET's `IHost` for dependency injection and middleware configuration.
